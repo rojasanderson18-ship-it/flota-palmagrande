@@ -225,12 +225,53 @@
    ===================================================================== */
 const KEY = 'fichas-flota-v2';
 const KEY_FOTOS = 'fichas-flota-fotos-v1';
-/* Persistencia: localStorage del navegador. Vive solo en este dispositivo
-   hasta que el aplicativo se conecte a un backend real (hoja de cálculo, API, etc). */
+const KEY_BACKEND = 'fichas-flota-backend-v1';
+
+/* ---------------- Backend compartido (Google Sheets + Apps Script) ----------------
+   La dirección y la clave del backend son ajuste de este dispositivo (no viajan
+   dentro de "data", porque hacen falta antes de poder cargar "data"). Solo se
+   sincronizan planes/equipos/historial/config: las fotos son pesadas y se quedan
+   solo en el dispositivo donde se tomaron. Ver README para desplegar el backend. */
+let sinSincronizar = false;
+const backendConf = () => { try{ return JSON.parse(localStorage.getItem(KEY_BACKEND) || 'null'); }catch(e){ return null; } };
+const guardarBackendConf = c => { try{ localStorage.setItem(KEY_BACKEND, JSON.stringify(c)); }catch(e){} };
+async function remoto(op, key, valor){
+  const c = backendConf();
+  if(!c || !c.url || !c.token) return null;
+  const qs = new URLSearchParams({op, key, token:c.token});
+  const url = c.url + (c.url.includes('?') ? '&' : '?') + qs.toString();
+  const opts = op === 'set'
+    ? {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({value:valor})}
+    : {method:'GET'};
+  const r = await fetch(url, opts);
+  if(!r.ok) throw new Error('http '+r.status);
+  const j = await r.json();
+  if(!j.ok) throw new Error(j.error || 'backend');
+  return j;
+}
+async function remotoGet(key){ const j = await remoto('get', key); return j ? j.value : null; }
+async function remotoSet(key, valor){ await remoto('set', key, valor); }
+
 const DB = {
-  async cargar(){ try{ const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; }catch(e){ return null; } },
-  async guardar(d){ try{ localStorage.setItem(KEY, JSON.stringify(d)); return true; }
-    catch(e){ return false; } },
+  async cargar(){
+    if(backendConf()){
+      try{
+        const v = await remotoGet(KEY);
+        if(v){ localStorage.setItem(KEY, v); sinSincronizar = false; return JSON.parse(v); }
+      }catch(e){ sinSincronizar = true; }
+    }
+    try{ const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; }catch(e){ return null; }
+  },
+  async guardar(d){
+    const txt = JSON.stringify(d);
+    let okLocal = true;
+    try{ localStorage.setItem(KEY, txt); }catch(e){ okLocal = false; }
+    if(backendConf()){
+      try{ await remotoSet(KEY, txt); sinSincronizar = false; }
+      catch(e){ sinSincronizar = true; }
+    }
+    return okLocal;
+  },
   async cargarViejo(){ try{ const v = localStorage.getItem('fichas-flota-v1'); return v ? JSON.parse(v) : null; }catch(e){ return null; } },
   async cargarFotos(){ try{ const v = localStorage.getItem(KEY_FOTOS); return v ? JSON.parse(v) : {}; }catch(e){ return {}; } },
   async guardarFotos(f){ try{ localStorage.setItem(KEY_FOTOS, JSON.stringify(f)); return true; }
@@ -1301,11 +1342,25 @@ function pintarHistorial(){
 
 /* ---------------- Datos ---------------- */
 function pintarDatos(){
+  const bc = backendConf();
   $('#main').innerHTML = `
     <section class="bloque" style="padding-top:24px;max-width:760px">
       <h1 class="titulo-vista">Datos y configuración</h1>
-      <p class="hint">Mientras el aplicativo no esté conectado a la hoja de cálculo, todo vive en este dispositivo. Exporte de vez en cuando para tener respaldo.</p>
-      <h2>Dirección del aplicativo</h2>
+      <p class="hint">${bc ? 'Los datos se guardan en este dispositivo y se sincronizan con el backend compartido.' : 'Mientras el aplicativo no esté conectado a un backend compartido, todo vive solo en este dispositivo.'} Exporte de vez en cuando para tener respaldo.</p>
+      <h2>Backend compartido</h2>
+      <p class="hint">Para que la flota se vea igual desde cualquier computador o celular, conecte una hoja de Google con Apps Script publicado como aplicación web (vea el README, carpeta <span class="mono">backend/apps-script</span>). Este ajuste es de este dispositivo/navegador, no viaja en el respaldo.</p>
+      ${sinSincronizar && bc ? '<div class="aviso">No se pudo sincronizar con el backend en el último intento. Los cambios quedaron guardados en este dispositivo y se reintentará al guardar de nuevo.</div>' : ''}
+      <div class="fila">
+        <label class="f" style="flex:3">URL de la aplicación web (Apps Script)
+          <input id="be-url" class="mono" placeholder="https://script.google.com/macros/s/AKfycb.../exec" value="${esc(bc?.url||'')}"></label>
+        <label class="f" style="flex:2">Clave
+          <input id="be-token" class="mono" placeholder="clave del SECRET" value="${esc(bc?.token||'')}"></label>
+      </div>
+      <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
+        <button class="btn" id="be-guardar">Guardar y probar conexión</button>
+        ${bc ? '<button class="btn sec" id="be-sync">Sincronizar ahora</button><button class="btn danger" id="be-quitar">Desconectar</button>' : ''}
+      </div>
+      <h2 style="margin-top:22px">Dirección del aplicativo</h2>
       <p class="hint">Cuando publique el archivo, por ejemplo en GitHub Pages, pegue aquí la dirección. Los códigos QR de cada equipo apuntarán allí y abrirán la ficha correspondiente.</p>
       <div class="fila" style="align-items:flex-end">
         <label class="f" style="flex:3">Dirección
@@ -1320,6 +1375,37 @@ function pintarDatos(){
       </div>
       <p class="hint">Hojas de configuración: ${data.planes.length} · Equipos: ${data.equipos.length} · Cambios: ${data.historial.length} · Fotos: ${Object.keys(fotos).length} (${(JSON.stringify(fotos).length/1048576).toFixed(2)} MB de 5 MB)</p>
     </section>`;
+  $('#be-guardar').onclick = async () => {
+    const url = $('#be-url').value.trim(), token = $('#be-token').value.trim();
+    if(!url || !token) return toast('Complete la URL y la clave.');
+    guardarBackendConf({url, token});
+    toast('Probando conexión…');
+    try{
+      await remotoSet(KEY, JSON.stringify(data));
+      sinSincronizar = false;
+      toast('Conectado. Se subieron los datos de este dispositivo al backend.');
+    }catch(e){
+      sinSincronizar = true;
+      toast('No se pudo conectar: revise la URL, la clave y que la aplicación web esté publicada.');
+    }
+    pintarMain();
+  };
+  const beSync = $('#be-sync');
+  if(beSync) beSync.onclick = async () => {
+    toast('Sincronizando…');
+    try{
+      const v = await remotoGet(KEY);
+      if(v){ data = JSON.parse(v); if(!data.planes || !data.planes.length) migrarAPlanes(); normalizar(); }
+      await DB.guardar(data);
+      sinSincronizar = false;
+      pintarLista(); pintarMain(); toast('Sincronizado con el backend');
+    }catch(e){ sinSincronizar = true; pintarMain(); toast('No se pudo sincronizar. Se sigue trabajando con la copia local.'); }
+  };
+  const beQuitar = $('#be-quitar');
+  if(beQuitar) beQuitar.onclick = () => confirmar('Desconectar backend',
+    'Este dispositivo dejará de sincronizar. Los datos siguen guardados localmente.', () => {
+      localStorage.removeItem(KEY_BACKEND); sinSincronizar = false; pintarMain(); toast('Backend desconectado');
+    });
   $('#btn-url').onclick = async () => { data.config.urlBase = $('#urlbase').value.trim(); await persistir(); pintarMain(); avisar('Dirección guardada'); };
   $('#btn-export').onclick = () => {
     descargar(new Blob([JSON.stringify(Object.assign({}, data, {fotos}), null, 2)], {type:'application/json'}), 'fichas-flota-'+hoy()+'.json');
