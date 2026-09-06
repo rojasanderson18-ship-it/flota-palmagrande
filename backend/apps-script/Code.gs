@@ -6,8 +6,11 @@
  * entre todos los dispositivos que abran el aplicativo. Las fotos van
  * aparte, como archivos en una carpeta de Google Drive (serían demasiado
  * pesadas para meterlas en la misma celda de la hoja): el aplicativo sube
- * cada una con op=set_foto y guarda el enlace de Drive en el propio equipo,
- * dentro del bloque de datos normal.
+ * cada una con op=set_foto y, para mostrarla en otro dispositivo, la vuelve
+ * a pedir con op=get_foto — el backend entrega los bytes de la foto en la
+ * respuesta en vez de dar un enlace directo de Drive para incrustar en
+ * <img>, porque Google no siempre deja cargar así una imagen de Drive
+ * (algunas cuentas, sobre todo de organización, lo bloquean).
  *
  * ---- Despliegue ----
  * 1. Crear una hoja de cálculo de Google nueva (puede estar vacía).
@@ -44,9 +47,6 @@ function carpetaFotos_(){
 function archivoFotoDe_(carpeta, key){
   const it = carpeta.getFilesByName(key);
   return it.hasNext() ? it.next() : null;
-}
-function urlFoto_(archivo){
-  return 'https://drive.google.com/uc?export=view&id=' + archivo.getId();
 }
 
 /* La clave vigente es la guardada en Propiedades del script si ya se cambió
@@ -95,6 +95,14 @@ function doGet(e){
     const valor = fila ? sh.getRange(fila,2).getValue() : null;
     return json_({ok:true, value: valor ? String(valor) : null});
   }
+  if(p.op === 'get_foto'){
+    if(!p.key) return json_({ok:false, error:'falta key'});
+    const archivo = archivoFotoDe_(carpetaFotos_(), p.key);
+    if(!archivo) return json_({ok:true, dataUrl:null});
+    const blob = archivo.getBlob();
+    const b64 = Utilities.base64Encode(blob.getBytes());
+    return json_({ok:true, dataUrl: 'data:'+blob.getContentType()+';base64,'+b64});
+  }
   return json_({ok:false, error:'operación desconocida'});
 }
 
@@ -141,9 +149,8 @@ function doPost(e){
       const carpeta = carpetaFotos_();
       const anterior = archivoFotoDe_(carpeta, p.key);
       if(anterior) anterior.setTrashed(true);
-      const archivo = carpeta.createFile(blob).setName(p.key);
-      archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      return json_({ok:true, url: urlFoto_(archivo)});
+      carpeta.createFile(blob).setName(p.key);
+      return json_({ok:true});
     } catch(err){
       /* Se manda el mensaje real al aplicativo para no tener que ir a
          revisar "Ejecuciones" en el editor de Apps Script cada vez. */

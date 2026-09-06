@@ -137,13 +137,26 @@ el editor no la actualiza por sí solo.
 
 **Fotos:** el backend crea una carpeta de Google Drive llamada "Fotos flota
 — fichas técnicas" (en el Drive de la cuenta que lo desplegó) y guarda ahí
-cada foto, compartida como "cualquiera con el enlace puede ver" para que se
-pueda mostrar directamente en la app desde cualquier dispositivo. Como usa
-`DriveApp`, la primera vez que se implemente (o se implemente de nuevo tras
-este cambio) Google va a pedir autorizar un permiso adicional sobre Drive —
-hay que aceptarlo para que subir fotos funcione. Quitar una foto desde el
-aplicativo la envía a la papelera de ese Drive, no la borra para siempre de
-inmediato.
+cada foto. La app **no** carga la foto con un enlace directo de Drive
+(`drive.google.com/uc?export=view&id=...`) — probamos eso primero y Google
+no siempre deja mostrarla así, sobre todo en cuentas de organización. En vez
+de eso, cada dispositivo le pide la foto al propio backend (`op=get_foto`),
+que responde con los bytes de la imagen ya autenticados con la misma clave
+del resto del aplicativo — así funciona sin depender de que Drive permita
+compartir el archivo públicamente. Por eso `eq.fotoUrl` en los datos
+sincronizados es solo un indicador de "hay foto en el backend", no un
+enlace real.
+
+Como usa `DriveApp`, la primera vez que se implemente (o se implemente de
+nuevo tras este cambio) Google va a pedir autorizar un permiso adicional
+sobre Drive. Si al ejecutar/implementar no aparece esa ventana de permisos,
+hay que forzarla ejecutando manualmente una función que use Drive (por
+ejemplo `carpetaFotos_`) desde el propio editor de Apps Script: menú
+desplegable de funciones (junto al botón ▶️ Ejecutar) → elegirla → Ejecutar
+→ ahí sí debería pedir autorización.
+
+Quitar una foto desde el aplicativo la envía a la papelera de ese Drive, no
+la borra para siempre de inmediato.
 
 ## Próximo paso natural
 

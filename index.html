@@ -266,14 +266,35 @@ async function remotoCambiarClave(nueva){
   const c = backendConf();
   guardarBackendConf(Object.assign({}, c, {token: nueva}));
 }
-/* Sube una foto (data URL) al backend y devuelve el enlace público de Drive
-   que hay que guardar en el equipo para que se vea desde otros dispositivos. */
-async function remotoSubirFoto(id, dataUrl){ const j = await remoto('set_foto', id, dataUrl); return j.url; }
+/* Sube una foto (data URL) al backend. eq.fotoUrl guarda solo un indicador
+   ("hay foto en el backend"), no un enlace directo: un <img src> apuntando
+   a Drive no siempre carga (algunas cuentas, sobre todo de organización,
+   bloquean ese tipo de enlace), así que la foto se vuelve a pedir por la
+   misma API (remotoObtenerFoto) y se muestra desde ahí. */
+async function remotoSubirFoto(id, dataUrl){ await remoto('set_foto', id, dataUrl); }
 async function remotoBorrarFoto(id){ await remoto('del_foto', id); }
-/* La foto de un equipo: primero la copia local (inmediata, sirve sin
-   internet), si no hay la del backend (para verla en un dispositivo
-   distinto al que la tomó). */
-const fotoDe = eq => fotos[eq.id] || eq.fotoUrl || null;
+async function remotoObtenerFoto(id){ const j = await remoto('get_foto', id); return j ? j.dataUrl : null; }
+/* La foto de un equipo: la copia local si ya se tiene (inmediata, sirve sin
+   internet); si no, se está pidiendo al backend en segundo plano (ver
+   asegurarFotos) y aparece en cuanto llegue. */
+const fotoDe = eq => fotos[eq.id] || null;
+/* Trae del backend las fotos que este dispositivo todavía no tiene en su
+   copia local (por ejemplo, equipos con foto subida desde otro
+   dispositivo). Se llama al cargar y al sincronizar; no bloquea el resto
+   de la app mientras las va trayendo. */
+async function asegurarFotos(){
+  if(!backendConf()) return;
+  const faltantes = data.equipos.filter(eq => eq.fotoUrl && !fotos[eq.id]);
+  if(!faltantes.length) return;
+  let huboAlguna = false;
+  for(const eq of faltantes){
+    try{
+      const dataUrl = await remotoObtenerFoto(eq.id);
+      if(dataUrl){ fotos[eq.id] = dataUrl; huboAlguna = true; }
+    }catch(e){ /* se reintenta la próxima vez que se sincronice */ }
+  }
+  if(huboAlguna){ await DB.guardarFotos(fotos); pintarLista(); pintarMain(); }
+}
 
 const DB = {
   async cargar(){
@@ -484,7 +505,8 @@ function elegirFoto(eq){
     if(backendConf()){
       toast('Subiendo foto al backend…');
       try{
-        eq.fotoUrl = await remotoSubirFoto(eq.id, dataUrl);
+        await remotoSubirFoto(eq.id, dataUrl);
+        eq.fotoUrl = true;
         await persistir();
         pintarLista(); pintarMain(); toast('Foto sincronizada');
       }catch(e){ toast('La foto quedó guardada en este dispositivo, pero no se pudo subir al backend: ' + e.message); }
@@ -1468,6 +1490,7 @@ function pintarDatos(){
       await DB.guardar(data);
       sinSincronizar = false;
       pintarLista(); pintarMain(); toast('Sincronizado con el backend');
+      asegurarFotos();
     }catch(e){ sinSincronizar = true; pintarMain(); toast('No se pudo sincronizar. Se sigue trabajando con la copia local.'); }
   };
   const beQuitar = $('#be-quitar');
@@ -1796,6 +1819,7 @@ $('#btn-nuevo-equipo').onclick = () => modalEquipo(null);
   if(window.innerWidth > 860 || vista !== 'fichas') document.body.dataset.mobile = 'ficha';
   pintarNav(); pintarLista(); pintarMain();
   comprobarAlmacenamiento();
+  asegurarFotos();
 })();
 
 if('serviceWorker' in navigator){
