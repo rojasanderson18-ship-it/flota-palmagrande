@@ -60,14 +60,18 @@ sincroniza contra la misma hoja de Google, sin configurar nada.
   y trabajar solo con la copia local — ver esa pestaña en el aplicativo.
 
 **Nota de seguridad:** la URL y la clave del backend por defecto están
-escritas en el propio `index.html` (constante `BACKEND_DEFAULT`) para que la
-conexión sea automática. Eso significa que cualquiera que abra la página
-pública y mire el código fuente del navegador puede leer esa clave y
-usarla para leer o escribir los datos del backend. Se acepta ese riesgo
-porque la información es de mantenimiento de flota (filtros, lubricantes,
-lecturas), no datos sensibles. Si eso cambia, hay que volver al esquema
-donde la clave se pide en pantalla en vez de ir en el código (quitar el
-valor por defecto de `BACKEND_DEFAULT`).
+dentro del propio `index.html` (constante `_bk`, codificada en Base64, no en
+texto plano) para que la conexión sea automática y no quede a simple vista
+al mirar el código. Aun así, cualquiera con conocimientos técnicos que la
+busque a propósito (por ejemplo, con las herramientas de desarrollador del
+navegador) puede decodificarla y usarla para leer o escribir los datos del
+backend — **esto no es cifrado, es solo ocultarla de un vistazo casual**. No
+existe forma de esconderla del todo en una app que corre solo en el
+navegador, sin un servidor propio. Se acepta ese riesgo porque la
+información es de mantenimiento de flota (filtros, lubricantes, lecturas),
+no datos sensibles. Si eso cambia, la única forma de estar realmente
+protegido es un servidor intermediario que el navegador nunca vea, en vez
+de esta constante en el código (ver "Próximo paso natural" más abajo).
 
 ## Backend compartido (Google Sheets + Apps Script)
 
@@ -90,20 +94,35 @@ en [`backend/apps-script/Code.gs`](backend/apps-script/Code.gs).
    - Quién tiene acceso: **Cualquier usuario**.
 6. Autorizar los permisos que pida Google la primera vez.
 7. Copiar la URL que termina en `/exec`.
-8. En `index.html`, buscar la constante `BACKEND_DEFAULT` (cerca de la línea
-   240) y poner ahí esa URL y la misma clave de `SECRET_INICIAL`.
-9. Publicar el cambio (commit + push; si usa GitHub Pages, se actualiza
-   sola). Desde ese momento, **cualquier dispositivo que abra el
-   aplicativo queda conectado automáticamente**, sin pegar nada a mano.
+8. Generar el valor de `_bk` con este comando (cambie la URL y la clave por
+   las suyas):
+
+   ```bash
+   python3 -c "
+   import base64, json
+   d = {'url':'https://script.google.com/macros/s/SU_ID/exec','token':'SU_CLAVE'}
+   print(base64.b64encode(json.dumps(d).encode()).decode())
+   "
+   ```
+
+   También se puede generar desde la consola del navegador (F12):
+   ```js
+   btoa(JSON.stringify({url:'https://script.google.com/macros/s/SU_ID/exec', token:'SU_CLAVE'}))
+   ```
+9. En `index.html`, buscar `const _bk = '...'` (cerca de la línea 235) y
+   reemplazar el texto entre comillas por el que generó el paso 8.
+10. Publicar el cambio (commit + push; si usa GitHub Pages, se actualiza
+    sola). Desde ese momento, **cualquier dispositivo que abra el
+    aplicativo queda conectado automáticamente**, sin pegar nada a mano.
 
 **Cambiar la clave más adelante:** desde el aplicativo, **Datos → Backend
 compartido → Cambiar clave**, escribir la clave nueva dos veces y confirmar
 — queda guardada en el backend (Propiedades del script) y como ajuste propio
 de ese dispositivo. Pero los demás dispositivos siguen usando la clave vieja
-que trae `BACKEND_DEFAULT` en el código, así que además hay que:
+que trae `_bk` en el código, así que además hay que:
 
-1. Actualizar `BACKEND_DEFAULT.token` en `index.html` con la clave nueva.
-2. Publicar ese cambio (commit + push).
+1. Generar un nuevo `_bk` con la clave nueva (paso 8 de arriba).
+2. Reemplazarlo en `index.html` y publicar (commit + push).
 
 Recién ahí todos los dispositivos vuelven a quedar conectados solos, sin
 tener que entrar a cada uno.

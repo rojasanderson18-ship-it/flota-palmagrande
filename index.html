@@ -230,19 +230,10 @@ const KEY_BACKEND = 'fichas-flota-backend-v1';
 /* ---------------- Backend compartido (Google Sheets + Apps Script) ----------------
    Solo se sincronizan planes/equipos/historial/config: las fotos son pesadas y
    se quedan solo en el dispositivo donde se tomaron. Ver README para desplegar
-   el backend.
-   BACKEND_DEFAULT deja cualquier dispositivo conectado automáticamente, sin
-   pegar nada a mano. OJO: esto viaja en el código público de la página —
-   quien vea el código fuente puede leer esta clave y usar el backend. Se
-   acepta ese riesgo porque los datos son de mantenimiento de flota, no
-   sensibles. Si se cambia la clave (Datos > Backend compartido > Cambiar
-   clave), hay que actualizar también el valor de aquí abajo y volver a
-   publicar, si no los dispositivos que no tengan un ajuste propio se quedan
-   con la clave vieja. */
-const BACKEND_DEFAULT = {
-  url: 'https://script.google.com/macros/s/AKfycbxiM0fxmj1lYpa1XQe2gpDwabSmD88D3OdC5X6jkIiEpyz1sILXgG3CU_IwJGvomzBqyQ/exec',
-  token: '2105'
-};
+   el backend y para cómo se arma _bk más abajo (deja cualquier dispositivo
+   conectado sin pegar nada a mano). */
+const _bk = 'eyJ1cmwiOiAiaHR0cHM6Ly9zY3JpcHQuZ29vZ2xlLmNvbS9tYWNyb3Mvcy9BS2Z5Y2J4aU0wZnhtajFsWXBhMVhRZTJncER3YWJTbUQ4OEQzT2RDNVg2amtJaUVweXoxc0lMWGdHM0NVX0l3Skd2b216QnF5US9leGVjIiwgInRva2VuIjogIjIxMDUifQ==';
+const BACKEND_DEFAULT = (() => { try{ return JSON.parse(atob(_bk)); }catch(e){ return {url:'',token:''}; } })();
 let sinSincronizar = false;
 const backendConf = () => {
   try{ const propio = JSON.parse(localStorage.getItem(KEY_BACKEND) || 'null'); if(propio && propio.url && propio.token) return propio; }
@@ -795,7 +786,7 @@ function modalPlanNuevo(tipo){
 function modalCambiarClave(){
   abrir(`<h3>Cambiar clave del backend</h3>
     <div class="body">
-      <p class="hint" style="margin:0 0 12px">Se actualiza en el backend y en este dispositivo. Los demás dispositivos siguen usando la clave que trae la aplicación por defecto (BACKEND_DEFAULT en index.html) hasta que se actualice ese valor en el código y se vuelva a publicar — solo entonces todos quedan conectados sin tocarlos uno por uno.</p>
+      <p class="hint" style="margin:0 0 12px">Se actualiza en el backend y en este dispositivo. Los demás dispositivos siguen usando la clave que trae la aplicación por defecto hasta que se regenere ese valor en index.html (ver README, sección Backend compartido) y se vuelva a publicar — solo entonces todos quedan conectados sin tocarlos uno por uno.</p>
       <label class="f">Clave nueva (mínimo 4 caracteres)<input id="nc1" type="text" class="mono"></label>
       <label class="f">Repetir clave nueva<input id="nc2" type="text" class="mono"></label>
     </div>
@@ -808,7 +799,7 @@ function modalCambiarClave(){
       try{
         await remotoCambiarClave(a);
         cerrar(); pintarMain();
-        toast('Clave cambiada en este dispositivo y en el backend. Actualice BACKEND_DEFAULT en el código y publique de nuevo para que los demás dispositivos sigan conectados.');
+        toast('Clave cambiada en este dispositivo y en el backend. Regenere el valor por defecto en index.html (ver README) y publique de nuevo para que los demás dispositivos sigan conectados.');
       }catch(e){ toast('No se pudo cambiar la clave: revise la conexión e intente de nuevo.'); }
     };});
 }
