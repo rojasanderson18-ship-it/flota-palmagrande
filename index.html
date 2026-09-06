@@ -1774,6 +1774,16 @@ $('#btn-nuevo-equipo').onclick = () => modalEquipo(null);
 })();
 
 if('serviceWorker' in navigator){
+  /* Cuando entra en control una versión nueva del service worker (por una
+     publicación reciente), recarga sola una vez para que la pestaña ya
+     abierta muestre el cambio, en vez de quedar pegada a la versión vieja
+     hasta que alguien haga un refresco forzado. */
+  let recargoPorSW = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(recargoPorSW) return;
+    recargoPorSW = true;
+    location.reload();
+  });
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
 
