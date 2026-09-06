@@ -17,15 +17,30 @@
  * 6. Autorizar los permisos que pida Google.
  * 7. Copiar la URL que termina en /exec.
  * 8. En el aplicativo, pestaña "Datos" > "Backend compartido": pegar esa URL
- *    y la misma clave de SECRET, y guardar.
+ *    y la misma clave de SECRET_INICIAL, y guardar.
  *
  * Cada vez que cambie este código hay que crear una "Nueva implementación"
  * (o "Gestionar implementaciones" > editar) para que los cambios se publiquen;
  * guardar el archivo en el editor no actualiza la URL /exec por sí solo.
+ *
+ * La clave se puede cambiar después SIN volver a tocar este código ni
+ * redesplegar: desde el aplicativo, "Datos > Backend compartido > Cambiar
+ * clave". Ese cambio queda guardado en las Propiedades del script (ver
+ * getSecret_/setSecret_ más abajo), no en este archivo.
  */
 
-const SECRET = 'CAMBIAR-ESTA-CLAVE';
+const SECRET_INICIAL = 'CAMBIAR-ESTA-CLAVE';
 const HOJA = 'kv';
+
+/* La clave vigente es la guardada en Propiedades del script si ya se cambió
+   alguna vez desde el aplicativo; si no, la de SECRET_INICIAL de arriba. */
+function getSecret_(){
+  const guardada = PropertiesService.getScriptProperties().getProperty('SECRET');
+  return guardada || SECRET_INICIAL;
+}
+function setSecret_(v){
+  PropertiesService.getScriptProperties().setProperty('SECRET', v);
+}
 
 function hoja_(){
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -50,7 +65,7 @@ function json_(obj){
 }
 
 function autorizado_(token){
-  return typeof token === 'string' && token.length > 0 && token === SECRET;
+  return typeof token === 'string' && token.length > 0 && token === getSecret_();
 }
 
 function doGet(e){
@@ -68,11 +83,20 @@ function doGet(e){
 
 function doPost(e){
   const p = (e && e.parameter) || {};
+  let body = {};
+  try{ body = JSON.parse(e.postData.contents); }catch(err){ /* se valida abajo según la operación */ }
+
+  if(p.op === 'set_secret'){
+    if(!autorizado_(p.token)) return json_({ok:false, error:'no autorizado'});
+    const nueva = body.value;
+    if(typeof nueva !== 'string' || nueva.trim().length < 4) return json_({ok:false, error:'la clave nueva debe tener al menos 4 caracteres'});
+    setSecret_(nueva.trim());
+    return json_({ok:true});
+  }
+
   if(!autorizado_(p.token)) return json_({ok:false, error:'no autorizado'});
   if(p.op === 'set'){
     if(!p.key) return json_({ok:false, error:'falta key'});
-    let body = {};
-    try{ body = JSON.parse(e.postData.contents); }catch(err){ return json_({ok:false, error:'cuerpo inválido'}); }
     if(typeof body.value !== 'string') return json_({ok:false, error:'falta value'});
     const lock = LockService.getScriptLock();
     lock.waitLock(10000);

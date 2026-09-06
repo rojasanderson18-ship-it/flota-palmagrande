@@ -71,17 +71,26 @@ en [`backend/apps-script/Code.gs`](backend/apps-script/Code.gs).
    crea su propia pestaña `kv` para guardar los datos).
 2. *Extensiones → Apps Script*.
 3. Reemplazar el contenido de `Code.gs` por el de este repositorio.
-4. Cambiar `SECRET` por una clave propia (cualquier texto largo y difícil de
-   adivinar) — es la contraseña que protege quién puede leer/escribir la
-   flota.
+4. Cambiar `SECRET_INICIAL` por una clave propia (cualquier texto largo y
+   difícil de adivinar) — es la contraseña que protege quién puede
+   leer/escribir la flota la primera vez.
 5. *Implementar → Nueva implementación → tipo "Aplicación web"*.
    - Ejecutar como: **Yo** (tu cuenta).
    - Quién tiene acceso: **Cualquier usuario**.
 6. Autorizar los permisos que pida Google la primera vez.
 7. Copiar la URL que termina en `/exec`.
 8. En el aplicativo, pestaña **Datos → Backend compartido**, pegar esa URL y
-   la misma clave de `SECRET`, y presionar "Guardar y probar conexión".
+   la misma clave de `SECRET_INICIAL`, y presionar "Guardar y probar
+   conexión".
 9. Repetir el paso 8 en cada dispositivo que deba compartir la misma flota.
+
+**Cambiar la clave más adelante:** no hace falta volver a tocar `Code.gs` ni
+redesplegar. Desde el aplicativo, **Datos → Backend compartido → Cambiar
+clave**, escribir la clave nueva dos veces y confirmar — queda guardada en el
+backend (en las Propiedades del script, no en el código) y en este
+dispositivo. Después hay que repetir "Guardar y probar conexión" con la
+clave nueva en los demás dispositivos que ya estaban conectados; si no,
+dejan de poder sincronizar hasta que se actualicen.
 
 Si se vuelve a editar `Code.gs` más adelante, hay que crear una nueva
 implementación (o editar la existente desde *Gestionar implementaciones*)
