@@ -238,9 +238,10 @@ const guardarBackendConf = c => { try{ localStorage.setItem(KEY_BACKEND, JSON.st
 async function remoto(op, key, valor){
   const c = backendConf();
   if(!c || !c.url || !c.token) return null;
-  const qs = new URLSearchParams({op, key, token:c.token});
+  const qs = new URLSearchParams({op, key:key||'', token:c.token});
   const url = c.url + (c.url.includes('?') ? '&' : '?') + qs.toString();
-  const opts = op === 'set'
+  const esEscritura = op === 'set' || op === 'set_secret';
+  const opts = esEscritura
     ? {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({value:valor})}
     : {method:'GET'};
   const r = await fetch(url, opts);
@@ -251,6 +252,13 @@ async function remoto(op, key, valor){
 }
 async function remotoGet(key){ const j = await remoto('get', key); return j ? j.value : null; }
 async function remotoSet(key, valor){ await remoto('set', key, valor); }
+/* Cambia la clave en el backend (requiere la clave actual, ya guardada en
+   backendConf) y, si sale bien, actualiza también la copia de este dispositivo. */
+async function remotoCambiarClave(nueva){
+  await remoto('set_secret', null, nueva);
+  const c = backendConf();
+  guardarBackendConf(Object.assign({}, c, {token: nueva}));
+}
 
 const DB = {
   async cargar(){
@@ -766,6 +774,26 @@ function modalPlanNuevo(tipo){
       if($('#p').value === 'vacia') plan.items = [];
       data.planes.push(plan); planSel = plan.id; vista = 'planes';
       await persistir(); cerrar(); pintarNav(); pintarMain(); avisar('Hoja creada');
+    };});
+}
+function modalCambiarClave(){
+  abrir(`<h3>Cambiar clave del backend</h3>
+    <div class="body">
+      <p class="hint" style="margin:0 0 12px">Se actualiza en el backend y en este dispositivo. Después hay que repetir "Guardar y probar conexión" con la nueva clave en los demás dispositivos conectados.</p>
+      <label class="f">Clave nueva (mínimo 4 caracteres)<input id="nc1" type="text" class="mono"></label>
+      <label class="f">Repetir clave nueva<input id="nc2" type="text" class="mono"></label>
+    </div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Cambiar clave</button></div>`,
+    () => { $('#ok').onclick = async () => {
+      const a = $('#nc1').value.trim(), b = $('#nc2').value.trim();
+      if(a.length < 4) return toast('La clave debe tener al menos 4 caracteres.');
+      if(a !== b) return toast('Las dos claves no coinciden.');
+      toast('Cambiando clave…');
+      try{
+        await remotoCambiarClave(a);
+        cerrar(); pintarMain();
+        toast('Clave cambiada. Actualícela también en los demás dispositivos.');
+      }catch(e){ toast('No se pudo cambiar la clave: revise la conexión e intente de nuevo.'); }
     };});
 }
 function modalPlanNombre(plan){
@@ -1358,7 +1386,7 @@ function pintarDatos(){
       </div>
       <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
         <button class="btn" id="be-guardar">Guardar y probar conexión</button>
-        ${bc ? '<button class="btn sec" id="be-sync">Sincronizar ahora</button><button class="btn danger" id="be-quitar">Desconectar</button>' : ''}
+        ${bc ? '<button class="btn sec" id="be-sync">Sincronizar ahora</button><button class="btn sec" id="be-clave">Cambiar clave</button><button class="btn danger" id="be-quitar">Desconectar</button>' : ''}
       </div>
       <h2 style="margin-top:22px">Dirección del aplicativo</h2>
       <p class="hint">Cuando publique el archivo, por ejemplo en GitHub Pages, pegue aquí la dirección. Los códigos QR de cada equipo apuntarán allí y abrirán la ficha correspondiente.</p>
@@ -1406,6 +1434,8 @@ function pintarDatos(){
     'Este dispositivo dejará de sincronizar. Los datos siguen guardados localmente.', () => {
       localStorage.removeItem(KEY_BACKEND); sinSincronizar = false; pintarMain(); toast('Backend desconectado');
     });
+  const beClave = $('#be-clave');
+  if(beClave) beClave.onclick = () => modalCambiarClave();
   $('#btn-url').onclick = async () => { data.config.urlBase = $('#urlbase').value.trim(); await persistir(); pintarMain(); avisar('Dirección guardada'); };
   $('#btn-export').onclick = () => {
     descargar(new Blob([JSON.stringify(Object.assign({}, data, {fotos}), null, 2)], {type:'application/json'}), 'fichas-flota-'+hoy()+'.json');
