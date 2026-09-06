@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fichas técnicas — Flota Palma Grande</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDF0EE; --card:#FFFFFF; --ink:#16211C; --ink-soft:#4A5B53;
+    --steel:#7C8A84; --line:#D3DAD6;
+    --green:#1F5D3C; --green-soft:#E2EDE6;
+    --amber:#B0600D; --amber-soft:#FBEEDC;
+    --red:#9E2B21;   --red-soft:#F9E3E1;
+    --radius:3px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Barlow',system-ui,sans-serif;font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+  button{font-family:inherit;font-size:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+  header.top{background:var(--ink);color:#EDF0EE;padding:13px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header.top h1{font-size:17px;font-weight:600;margin:0}
+  header.top .sub{color:#8FA79A;font-size:13px}
+  header.top nav{margin-left:auto;display:flex;gap:4px;overflow-x:auto;max-width:100%;padding-bottom:2px}
+  header.top nav button{background:transparent;border:1px solid #34443C;color:#B9C9C1;padding:5px 12px;border-radius:var(--radius);white-space:nowrap}
+  header.top nav button[aria-current="true"]{background:#EDF0EE;color:var(--ink);border-color:#EDF0EE;font-weight:600}
+
+  .shell{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 56px)}
+  @media(max-width:860px){
+    .shell{grid-template-columns:1fr}
+    body[data-mobile="ficha"] aside{display:none}
+    body[data-mobile="lista"] main{display:none}
+    .backbtn{display:inline-flex !important}
+  }
+
+  aside{border-right:1px solid var(--line);background:#E5E9E7;padding:14px 12px 40px}
+  .search{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--card);margin-bottom:10px}
+  .grupo{font-size:12px;color:var(--steel);font-weight:600;margin:14px 4px 6px;letter-spacing:.04em}
+  .eq{width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:7px 9px;margin-bottom:5px;display:flex;gap:9px;align-items:center}
+  .eq:hover{border-color:var(--green)}
+  .eq[aria-current="true"]{background:var(--ink);border-color:var(--ink);color:#EDF0EE}
+  .eq[aria-current="true"] .eq-sub{color:#93AA9E}
+  .eq[aria-current="true"] .eq-ph{background:#2A3A33}
+  .eq-cod{font-weight:700;font-size:13px;min-width:46px}
+  .eq-nom{font-size:14px;line-height:1.2}
+  .eq-sub{font-size:12px;color:var(--steel)}
+  .eq-foto{width:42px;height:32px;flex:none;border-radius:2px;background:#DCE2DE;object-fit:cover;display:block}
+  .eq-ph{width:42px;height:32px;flex:none;border-radius:2px;background:#DCE2DE;display:flex;align-items:center;justify-content:center}
+  .eq-ph svg{width:22px;height:22px;opacity:.45}
+  .dot{width:8px;height:8px;border-radius:50%;margin-left:auto;flex:none}
+  .dot.ok{background:var(--green)}.dot.prox{background:var(--amber)}.dot.venc{background:var(--red)}.dot.na{background:var(--line)}
+  .addeq{width:100%;margin-top:12px;background:transparent;border:1px dashed var(--steel);color:var(--ink-soft);padding:8px;border-radius:var(--radius)}
+
+  main{padding:0 0 60px}
+  .backbtn{display:none;align-items:center;gap:6px;background:none;border:none;color:var(--green);padding:12px 20px 0;font-weight:600}
+  .fichahead{background:var(--ink);color:#EDF0EE;padding:18px 22px;display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end}
+  .fichafoto{width:168px;height:118px;border-radius:2px;overflow:hidden;background:#22302A;display:flex;align-items:center;justify-content:center;flex:none;border:none;padding:0;color:#EDF0EE}
+  .fichafoto img{width:100%;height:100%;object-fit:cover;display:block}
+  .fichafoto svg{width:54px;height:54px;opacity:.4}
+  @media(max-width:560px){.fichafoto{width:100%;height:150px}}
+  .fichahead .cod{font-size:30px;font-weight:700;line-height:1}
+  .fichahead .nom{font-size:18px;font-weight:600}
+  .fichahead .meta{font-size:13px;color:#9CB3A7}
+  .fichahead .meta a{color:#BFD4C8}
+  .lectura{margin-left:auto;text-align:right}
+  .lectura .val{font-size:26px;font-weight:700;line-height:1}
+  .lectura .lbl{font-size:12px;color:#9CB3A7}
+  .lectura button{background:transparent;border:1px solid #3A4A42;color:#B9C9C1;border-radius:var(--radius);padding:3px 9px;margin-top:6px;font-size:12px}
+
+  .barra{display:flex;gap:8px;flex-wrap:wrap;padding:14px 22px;border-bottom:1px solid var(--line);background:#E9ECEA;align-items:center}
+  .btn{background:var(--green);color:#fff;border:1px solid var(--green);padding:8px 14px;border-radius:var(--radius);font-weight:600}
+  .btn.sec{background:var(--card);color:var(--ink);border-color:var(--line);font-weight:500}
+  .btn.sec:hover{border-color:var(--steel)}
+  .btn.danger{background:var(--card);color:var(--red);border-color:var(--red-soft)}
+
+  section.bloque{padding:20px 22px 0;max-width:1180px}
+  .bloque h2{font-size:15px;margin:0 0 4px;font-weight:600}
+  .bloque p.hint{margin:0 0 12px;color:var(--steel);font-size:13px;max-width:74ch}
+  .titulo-vista{font-size:22px;font-weight:700;margin:0 0 2px}
+
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  th{font-size:12px;text-align:left;color:var(--ink-soft);font-weight:600;padding:9px 10px;background:#E9ECEA;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:9px 10px;border-bottom:1px solid #E9ECEA;vertical-align:middle;font-size:14px}
+  tr:last-child td{border-bottom:none}
+  tr.clic{cursor:pointer}
+  tr.clic:hover td{background:#F3F6F4}
+  td.num,th.num{text-align:right;white-space:nowrap}
+  tfoot td{background:#E9ECEA;font-weight:600;border-top:1px solid var(--line)}
+  .ref{font-size:13px}
+  .ref.vacio{color:var(--steel);font-style:italic}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap}
+  .badge.ok{background:var(--green-soft);color:var(--green)}
+  .badge.prox{background:var(--amber-soft);color:var(--amber)}
+  .badge.venc{background:var(--red-soft);color:var(--red)}
+  .badge.na{background:#E9ECEA;color:var(--steel)}
+  .badge.propio{background:#E7EDF3;color:#2A4C6B}
+  .linkbtn{background:none;border:none;color:var(--green);padding:2px 4px;font-size:13px;text-decoration:underline}
+  .linkbtn.del{color:var(--red)}
+  .vacio-msg{background:var(--card);border:1px dashed var(--line);border-radius:var(--radius);padding:20px;color:var(--steel);text-align:center}
+
+  .tarjetas{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .tarjeta{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;min-width:132px;flex:1}
+  .tarjeta .n{font-size:28px;font-weight:700;line-height:1.1}
+  .tarjeta .t{font-size:13px;color:var(--ink-soft)}
+  .tarjeta.venc{border-left:3px solid var(--red)} .tarjeta.venc .n{color:var(--red)}
+  .tarjeta.prox{border-left:3px solid var(--amber)} .tarjeta.prox .n{color:var(--amber)}
+  .tarjeta.ok{border-left:3px solid var(--green)} .tarjeta.ok .n{color:var(--green)}
+
+  .plan{width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .plan:hover{border-color:var(--green)}
+  .plan .pn{font-weight:600}
+  .plan .pd{font-size:13px;color:var(--steel)}
+  .plan .pright{margin-left:auto;text-align:right;font-size:13px;color:var(--ink-soft)}
+
+  .graf{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  .gb-row{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+  .gb-row:last-child{margin-bottom:0}
+  .gb-lab{width:150px;flex:none;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gb-track{flex:1;height:19px;background:#EDF0EE;border-radius:2px;overflow:hidden;min-width:40px}
+  .gb-fill{display:block;height:100%;background:var(--green);border-radius:2px}
+  .gb-fill.alto{background:var(--amber)}
+  .gb-val{width:120px;flex:none;text-align:right;font-size:13px;white-space:nowrap}
+  .gb-grupo{font-size:12px;color:var(--steel);font-weight:600;margin:12px 0 6px}
+  .gb-grupo:first-child{margin-top:0}
+  .gv{display:flex;gap:6px;align-items:flex-end;height:170px}
+  .gv-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0}
+  .gv-val{font-size:11px;color:var(--ink-soft);margin-bottom:3px;white-space:nowrap}
+  .gv-bar{width:100%;max-width:46px;background:var(--green);border-radius:2px 2px 0 0;min-height:2px}
+  .gv-bar.cero{background:var(--line)}
+  .gv-lab{font-size:11px;color:var(--steel);margin-top:5px;white-space:nowrap}
+  @media(max-width:560px){.gb-lab{width:96px}.gb-val{width:88px;font-size:12px}}
+  .qr-caja{display:flex;gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;flex-wrap:wrap}
+  .qr-caja img,.qr-caja canvas{width:112px;height:112px;flex:none}
+  .qr-txt{font-size:13px;color:var(--ink-soft);max-width:52ch}
+
+  .overlay{position:fixed;inset:0;background:rgba(15,25,20,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+  .overlay[hidden]{display:none}
+  .modal{background:var(--card);border-radius:var(--radius);width:100%;max-width:580px;max-height:90vh;overflow:auto;box-shadow:0 18px 50px rgba(10,20,15,.3)}
+  .modal h3{margin:0;padding:16px 20px;border-bottom:1px solid var(--line);font-size:16px}
+  .modal .body{padding:18px 20px}
+  .modal .pie{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--card)}
+  .sep{margin:16px -20px 14px;padding:10px 20px 0;border-top:1px solid var(--line);font-size:13px;font-weight:600;color:var(--ink-soft)}
+  .sep small{display:block;font-weight:400;color:var(--steel)}
+  label.f{display:block;margin-bottom:12px;font-size:13px;color:var(--ink-soft);font-weight:600}
+  label.f input,label.f select,label.f textarea{display:block;width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:#FAFBFA;font-weight:400;color:var(--ink)}
+  .fila{display:flex;gap:12px;flex-wrap:wrap}
+  .fila>*{flex:1;min-width:120px}
+  .check{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;background:#FAFBFA}
+  .check input{margin-top:3px}
+  .check.on{border-color:var(--green);background:var(--green-soft)}
+  .check .c-nom{font-weight:600;font-size:14px}
+  .check .c-sub{font-size:12px;color:var(--ink-soft)}
+  #aviso-almacen{background:var(--red-soft);color:#7A211A;border-bottom:1px solid #E9C3BF;padding:9px 20px;font-size:13px}
+  .aviso{background:var(--amber-soft);border-left:3px solid var(--amber);padding:9px 12px;border-radius:2px;font-size:13px;color:#7A430A;margin-bottom:14px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;background:var(--ink);color:#EDF0EE;padding:10px 18px;border-radius:var(--radius);z-index:80;font-size:14px}
+  .toast[hidden]{display:none}
+  .cargando{padding:40px 22px;color:var(--steel)}
+
+  #print-area{display:none}
+  @media print{
+    body{background:#fff}
+    header.top,.shell,.overlay,.toast{display:none !important}
+    #print-area{display:block}
+    @page{margin:12mm}
+    .p-head{display:flex;gap:16px;align-items:flex-start;border-bottom:2px solid #16211C;padding-bottom:10px;margin-bottom:14px}
+    .p-foto{width:150px;height:105px;object-fit:cover;border:1px solid #999;flex:none}
+    .p-cod{font-size:26px;font-weight:700;line-height:1}
+    .p-qr{margin-left:auto;text-align:center;font-size:9px;color:#555}
+    .p-qr img{width:92px;height:92px;display:block}
+    #print-area h4{font-size:12px;margin:14px 0 5px;padding-bottom:3px;border-bottom:1px solid #ccc}
+    #print-area table{border:1px solid #999;font-size:11px;width:100%;border-collapse:collapse}
+    #print-area th{background:#EEE;padding:4px 6px;border-bottom:1px solid #999;text-align:left}
+    #print-area td{padding:4px 6px;border-bottom:1px solid #DDD}
+    #print-area tr{page-break-inside:avoid}
+    .p-firma{margin-top:26px;display:flex;gap:40px;font-size:11px}
+    .p-firma div{flex:1;border-top:1px solid #333;padding-top:4px}
+    .p-pie{margin-top:16px;font-size:10px;color:#666;border-top:1px solid #CCC;padding-top:6px}
+    .p-datos{margin-bottom:4px}
+    .p-datos th{width:15%;background:#F4F4F4;font-size:10px;text-transform:uppercase;letter-spacing:.03em;color:#444}
+    .p-datos td{font-size:11px;font-weight:600}
+  }
+</style>
+</head>
+<body data-mobile="lista">
+
+<header class="top">
+  <h1>Fichas técnicas de flota</h1>
+  <span class="sub">Palma Grande S.A.S.</span>
+  <nav id="nav"></nav>
+</header>
+
+<div class="shell">
+  <aside>
+    <input class="search" id="buscar" placeholder="Buscar equipo, placa o modelo" autocomplete="off">
+    <div id="lista"></div>
+    <button class="addeq" id="btn-nuevo-equipo">+ Agregar equipo</button>
+  </aside>
+  <main id="main"><div class="cargando">Cargando fichas…</div></main>
+</div>
+
+<div class="overlay" id="overlay" hidden><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast" hidden></div>
+<div id="print-area"></div>
+<div id="qr-oculto" style="position:absolute;left:-9999px;top:-9999px"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+/* =====================================================================
+   MODELO
+   planes[]  : hoja de configuración. Qué lleva y cada cuánto. Horas para
+               máquinas, kilómetros para camiones. Se comparte entre equipos
+               del mismo modelo.
+   equipos[] : cada equipo apunta a un plan y guarda su propio estado
+               (cuándo se le hizo cada cambio) en equipo.estado[itemId].
+   ===================================================================== */
+const KEY = 'fichas-flota-v2';
+const KEY_FOTOS = 'fichas-flota-fotos-v1';
+const DB = {
+  async cargar(){ try{ const r = await window.storage.get(KEY); return r ? JSON.parse(r.value) : null; }catch(e){ return null; } },
+  async guardar(d){ try{ await window.storage.set(KEY, JSON.stringify(d)); return true; }
+    catch(e){ return false; } },
+  async cargarViejo(){ try{ const r = await window.storage.get('fichas-flota-v1'); return r ? JSON.parse(r.value) : null; }catch(e){ return null; } },
+  async cargarFotos(){ try{ const r = await window.storage.get(KEY_FOTOS); return r ? JSON.parse(r.value) : {}; }catch(e){ return {}; } },
+  async guardarFotos(f){ try{ await window.storage.set(KEY_FOTOS, JSON.stringify(f)); return true; }
+    catch(e){ toast('No se pudo guardar la foto. Puede que ya no quepan más imágenes.'); return false; } }
+};
+
+/* ---------------- Configuración base ---------------- */
+const PLANTILLA_TRACTOR = [
+  ['filtro','Filtro de aceite de motor','und',250],
+  ['filtro','Filtro de aire primario','und',500],
+  ['filtro','Filtro de aire secundario','und',1000],
+  ['filtro','Filtro de combustible','und',500],
+  ['filtro','Separador de agua','und',500],
+  ['filtro','Filtro hidráulico','und',1000],
+  ['filtro','Filtro de transmisión','und',1000],
+  ['lubricante','Aceite de motor','gal',250],
+  ['lubricante','Aceite hidráulico / transmisión','gal',1000],
+  ['lubricante','Aceite de diferencial','gal',1000],
+  ['lubricante','Aceite de mandos finales','gal',1000],
+  ['lubricante','Refrigerante','gal',2000]
+];
+const PLANTILLA_CAMION = [
+  ['filtro','Filtro de aceite de motor','und',10000],
+  ['filtro','Filtro de aire','und',20000],
+  ['filtro','Filtro de combustible','und',10000],
+  ['filtro','Separador de agua','und',10000],
+  ['filtro','Filtro secador de aire','und',40000],
+  ['filtro','Filtro de cabina','und',20000],
+  ['lubricante','Aceite de motor','gal',10000],
+  ['lubricante','Aceite de caja','gal',60000],
+  ['lubricante','Aceite de diferencial','gal',60000],
+  ['lubricante','Aceite de dirección hidráulica','gal',40000],
+  ['lubricante','Refrigerante','gal',40000]
+];
+const USO_DEF = {maquina:6, camion:90};
+
+/* Estado operativo. Congela las proyecciones cuando el equipo no está trabajando.
+   Al conectar con Apps Script, este campo debe leerse de CierreJornada en vez de digitarse. */
+const ESTADOS = {
+  operativo:{txt:'Operativo', badge:'ok',   cuenta:true},
+  taller:   {txt:'En taller', badge:'prox', cuenta:false},
+  varado:   {txt:'Varado',    badge:'venc', cuenta:false},
+  baja:     {txt:'Dado de baja', badge:'na', cuenta:false}
+};
+const estOp = eq => ESTADOS[eq.operativo] || ESTADOS.operativo;
+const trabajando = eq => estOp(eq).cuenta;
+
+let uid = Date.now();
+const nid = () => 'i' + (++uid).toString(36);
+const crearItems = p => p.map(([categoria,componente,unidad,intervalo]) => ({
+  id:nid(), categoria, componente, referencia:'', cantidad:null, unidad, intervalo
+}));
+function crearPlan(nombre, tipo){
+  return {id:nid(), nombre, tipo, medidor: tipo==='camion'?'km':'horas',
+          items: crearItems(tipo==='camion'?PLANTILLA_CAMION:PLANTILLA_TRACTOR)};
+}
+
+function semilla(){
+  const defMaq = [
+    ['Kubota B2441', [['01','Kubota','B2441'],['02','Kubota','B2441']]],
+    ['Kubota M9540', [['03','Kubota','M9540'],['04','Kubota','M9540']]],
+    ['John Deere 2850', [['05','John Deere','2850']]],
+    ['Kubota K5100', [['06','Kubota','K5100']]],
+    ['Kubota M108S', [['07','Kubota','M108S']]],
+    ['Lovol TH754-H', [['08','Lovol','TH754-H'],['09','Lovol','TH754-H']]],
+    ['Lovol TH904-X', [['10','Lovol','TH904-X'],['11','Lovol','TH904-X']]]
+  ];
+  const planes = [], equipos = [];
+  defMaq.forEach(([nombre, lista]) => {
+    const plan = crearPlan(nombre,'maquina');
+    planes.push(plan);
+    lista.forEach(([cod,marca,modelo]) => equipos.push({
+      id:nid(), codigo:'#'+cod, tipo:'maquina', marca, modelo, placa:'', serie:'',
+      medidor:'horas', lectura:0, lecturaFecha:'', usoDia:USO_DEF.maquina, bitacora:[],
+      responsable:'', notas:'', operativo:'operativo', planId:plan.id, estado:{}, propios:[]
+    }));
+  });
+  const camDef = [
+    ['Volkswagen Constellation', {codigo:'EXX568', marca:'Volkswagen', modelo:'Constellation (MULTILIF)', placa:'EXX568', responsable:'Rusbel Algarra', notas:'Transporte de fruta'}],
+    ['Isuzu FVR', {codigo:'SXY206', marca:'Isuzu', modelo:'FVR', placa:'SXY206', responsable:'Edgar Tinjacá', notas:'Transporte de personal'}]
+  ];
+  camDef.forEach(([nombre, c]) => {
+    const plan = crearPlan(nombre,'camion');
+    planes.push(plan);
+    equipos.push(Object.assign({id:nid(), tipo:'camion', serie:'', medidor:'km', lectura:0, lecturaFecha:'',
+      usoDia:USO_DEF.camion, bitacora:[], operativo:'operativo', planId:plan.id, estado:{}, propios:[]}, c));
+  });
+  return {planes, equipos, historial:[], config:{urlBase:'', horizonte:30}};
+}
+
+/* ---------------- Estado ---------------- */
+let data = {planes:[], equipos:[], historial:[], config:{urlBase:'', horizonte:30}};
+let fotos = {};
+let sel = null, planSel = null, vista = 'tablero', filtro = '';
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* Fecha local, no UTC: con toISOString, después de las 7 p.m. en Colombia
+   el aplicativo proponía la fecha del día siguiente. */
+function isoLocal(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+const hoy = () => isoLocal(new Date());
+const nfmt = n => (n==null||n==='') ? '—' : Number(n).toLocaleString('es-CO');
+const money = n => (n==null||n==='') ? '—' : '$'+Number(Math.round(n)).toLocaleString('es-CO');
+const u = eq => eq.medidor === 'km' ? 'km' : 'h';
+const eqPorId = id => data.equipos.find(e => e.id === id);
+const planPorId = id => data.planes.find(p => p.id === id);
+const equiposDePlan = id => data.equipos.filter(e => e.planId === id);
+
+function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(t._t); t._t=setTimeout(()=>t.hidden=true,4200); }
+let sinAlmacenamiento = false;
+async function persistir(){
+  const ok = await DB.guardar(data);
+  if(sinAlmacenamiento !== !ok){ sinAlmacenamiento = !ok; pintarAvisoAlmacenamiento(); }
+  return ok;
+}
+/* Nunca confirmar un guardado que no ocurrió: si falló, ese es el mensaje que se ve. */
+function avisar(msg){
+  toast(sinAlmacenamiento ? 'NO se guardó. Este navegador no tiene dónde almacenar los datos; use Descargar respaldo.' : msg);
+}
+function pintarAvisoAlmacenamiento(){
+  let b = $('#aviso-almacen');
+  if(!sinAlmacenamiento){ if(b) b.remove(); return; }
+  if(b) return;
+  b = document.createElement('div');
+  b.id = 'aviso-almacen';
+  b.innerHTML = 'Los cambios <strong>no se están guardando</strong> en este navegador. Puede usar el aplicativo, pero al cerrar la página se pierde lo que digite. Descargue un respaldo desde la pestaña Datos.';
+  document.querySelector('header.top').insertAdjacentElement('afterend', b);
+}
+
+const SILUETA = {
+  maquina:`<svg viewBox="0 0 48 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="13" cy="22" r="8"/><circle cx="37" cy="24" r="6"/><path d="M6 14h9V7h11l5 7h11v8"/><path d="M15 14h11"/></svg>`,
+  camion:`<svg viewBox="0 0 48 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 8h25v14H3z"/><path d="M28 13h8l6 6v3h-14z"/><circle cx="13" cy="24" r="4"/><circle cx="36" cy="24" r="4"/></svg>`
+};
+const silueta = eq => SILUETA[eq.tipo === 'camion' ? 'camion' : 'maquina'];
+
+/* ---------------- Items de un equipo = plan + propios + estado ---------------- */
+function itemsDe(eq){
+  const plan = planPorId(eq.planId);
+  const base = plan ? plan.items.map(i => Object.assign({}, i, {origen:'plan'})) : [];
+  const props = (eq.propios||[]).map(i => Object.assign({}, i, {origen:'propio'}));
+  return base.concat(props).map(i => {
+    const st = (eq.estado||{})[i.id] || {};
+    return Object.assign({}, i, {ultLectura: st.ultLectura ?? null, ultFecha: st.ultFecha || ''});
+  });
+}
+function fijarUltimo(eq, itemId, lectura, fecha){
+  eq.estado = eq.estado || {};
+  eq.estado[itemId] = {ultLectura:lectura, ultFecha:fecha};
+}
+
+/* ---------------- Fotos ---------------- */
+function comprimirFoto(file){
+  return new Promise((resolve,reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('lectura'));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('imagen'));
+      img.onload = () => {
+        const max = 1000, k = Math.min(1, max/Math.max(img.width,img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        resolve(c.toDataURL('image/jpeg',0.62));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function elegirFoto(eq){
+  const inp = document.createElement('input');
+  inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if(!f) return;
+    toast('Procesando foto…');
+    try{
+      fotos[eq.id] = await comprimirFoto(f);
+      if(!await DB.guardarFotos(fotos)){ delete fotos[eq.id]; return; }
+      pintarLista(); pintarMain(); toast('Foto guardada');
+    }catch(e){ toast('No se pudo leer esa imagen. Intente con otra.'); }
+  };
+  inp.click();
+}
+
+/* ---------------- Cálculos ---------------- */
+function estadoItem(eq, it){
+  if(!it.intervalo || it.ultLectura == null) return {clave:'na', txt:'Sin registrar', restante:null, proximo:null};
+  const proximo = Number(it.ultLectura) + Number(it.intervalo);
+  const restante = proximo - Number(eq.lectura||0);
+  if(restante <= 0) return {clave:'venc', txt:'Vencido', restante, proximo};
+  if(restante <= it.intervalo*0.15) return {clave:'prox', txt:'Próximo', restante, proximo};
+  return {clave:'ok', txt:'Al día', restante, proximo};
+}
+function estadoEquipo(eq){
+  const e = itemsDe(eq).map(i => estadoItem(eq,i).clave);
+  if(!e.length) return 'na';
+  if(e.includes('venc')) return 'venc';
+  if(e.includes('prox')) return 'prox';
+  return e.every(x => x==='na') ? 'na' : 'ok';
+}
+/* Uso diario medido: suma los tramos entre lecturas consecutivas e ignora los que
+   retroceden, para que una lectura mal digitada no arruine todo el cálculo. */
+function usoDiario(eq){
+  const b = (eq.bitacora||[]).filter(r => r.lectura != null && r.fecha).sort((a,c)=>a.fecha.localeCompare(c.fecha));
+  const tope = eq.medidor === 'km' ? 800 : 20;   // tope de plausibilidad por día
+  let horas = 0, dias = 0;
+  for(let i = 1; i < b.length; i++){
+    const d = (new Date(b[i].fecha) - new Date(b[i-1].fecha)) / 86400000;
+    const delta = Number(b[i].lectura) - Number(b[i-1].lectura);
+    if(d > 0 && delta >= 0 && delta/d <= tope){ horas += delta; dias += d; }
+  }
+  if(dias >= 5 && horas > 0) return {valor: horas/dias, fuente:'medido', dias:Math.round(dias)};
+  return {valor: Number(eq.usoDia) || USO_DEF[eq.tipo] || 6, fuente:'estimado'};
+}
+function proyeccion(eq, it){
+  const e = estadoItem(eq,it);
+  if(e.restante == null) return Object.assign({}, e, {dias:null, fecha:null});
+  if(!trabajando(eq)) return Object.assign({}, e, {dias:null, fecha:null, parado:true});
+  const uso = usoDiario(eq);
+  if(!uso.valor) return Object.assign({}, e, {dias:null, fecha:null});
+  const dias = Math.round(e.restante / uso.valor);
+  const d = new Date(); d.setDate(d.getDate() + dias);
+  return Object.assign({}, e, {dias, fecha:isoLocal(d), uso});
+}
+const fechaCorta = f => f ? new Date(f+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'short'}) : '—';
+const fechaHora = iso => { if(!iso) return null;
+  const d = new Date(iso); if(isNaN(d)) return null;
+  return d.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+};
+/* Días entre la fecha del cambio y el momento en que se digitó */
+function desfaseRegistro(h){
+  if(!h.registrado || !h.fecha) return null;
+  const d = Math.round((new Date(h.registrado) - new Date(h.fecha+'T12:00:00')) / 86400000);
+  return d > 0 ? d : 0;
+}
+function textoDias(d){
+  if(d == null) return '—';
+  if(d < 0) return Math.abs(d)+' días atrás';
+  if(d === 0) return 'hoy';
+  return 'en '+d+' días';
+}
+function pendientes(diasMax){
+  const out = [];
+  data.equipos.forEach(eq => itemsDe(eq).forEach(it => {
+    const p = proyeccion(eq,it);
+    if(p.clave === 'na') return;
+    if(diasMax != null){ if(p.dias == null || p.dias > diasMax) return; }
+    else if(p.clave === 'ok') return;
+    out.push({eq, it, p});
+  }));
+  return out.sort((a,b) => (a.p.dias ?? 9e9) - (b.p.dias ?? 9e9));
+}
+function faltanRefsPlan(plan){ return plan.items.filter(i => !i.referencia).length; }
+
+/* ---------------- Gráficas (HTML puro, sin librerías) ---------------- */
+function barrasH(filas){
+  const max = Math.max(...filas.map(f => f.valor), 0);
+  if(!max) return '';
+  return filas.map(f => `<div class="gb-row">
+      <span class="gb-lab" title="${esc(f.etiqueta)}">${esc(f.etiqueta)}</span>
+      <span class="gb-track"><span class="gb-fill ${f.alto?'alto':''}" style="width:${Math.max(2, f.valor/max*100)}%"></span></span>
+      <span class="gb-val mono">${esc(f.texto)}</span>
+    </div>`).join('');
+}
+function barrasV(cols){
+  const max = Math.max(...cols.map(c => c.valor), 0);
+  return `<div class="gv">${cols.map(c => `<div class="gv-col">
+      <span class="gv-val">${c.valor ? esc(c.texto) : ''}</span>
+      <span class="gv-bar ${c.valor?'':'cero'}" style="height:${max ? Math.max(1, c.valor/max*100) : 1}%"></span>
+      <span class="gv-lab">${esc(c.etiqueta)}</span>
+    </div>`).join('')}</div>`;
+}
+const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function ultimosMeses(n){
+  const out = [], d = new Date();
+  d.setDate(1);
+  for(let i = n-1; i >= 0; i--){
+    const m = new Date(d.getFullYear(), d.getMonth()-i, 1);
+    out.push({clave: isoLocal(m).slice(0,7), etiqueta: MESES[m.getMonth()]});
+  }
+  return out;
+}
+function proximosMeses(n){
+  const out = [], d = new Date();
+  d.setDate(1);
+  for(let i = 0; i < n; i++){
+    const m = new Date(d.getFullYear(), d.getMonth()+i, 1);
+    out.push({clave: isoLocal(m).slice(0,7), etiqueta: MESES[m.getMonth()]});
+  }
+  return out;
+}
+
+/* =====================================================================
+   Navegación
+   ===================================================================== */
+const VISTAS = [
+  ['tablero','Tablero'], ['fichas','Fichas'], ['planes','Configuración'], ['requisicion','Requisición'],
+  ['referencias','Referencias'], ['costos','Costos'], ['hist','Historial'], ['datos','Datos']
+];
+function pintarNav(){
+  $('#nav').innerHTML = VISTAS.map(([k,t]) => `<button data-v="${k}" aria-current="${vista===k}">${t}</button>`).join('');
+  $('#nav').querySelectorAll('button').forEach(b => b.onclick = () => {
+    vista = b.dataset.v;
+    if(vista === 'planes') planSel = null;
+    if(window.innerWidth <= 860) document.body.dataset.mobile = 'ficha';
+    pintarNav(); pintarMain();
+  });
+}
+function pintarLista(){
+  const q = filtro.trim().toLowerCase();
+  const ok = e => !q || [e.codigo,e.marca,e.modelo,e.placa,e.responsable].join(' ').toLowerCase().includes(q);
+  const grupo = (t,arr) => !arr.length ? '' : `<div class="grupo">${t}</div>` + arr.map(e => `
+      <button class="eq" data-id="${e.id}" aria-current="${e.id===sel}">
+        ${fotos[e.id] ? `<img class="eq-foto" src="${fotos[e.id]}" alt="">` : `<span class="eq-ph">${silueta(e)}</span>`}
+        <span class="eq-cod mono">${esc(e.codigo)}</span>
+        <span><span class="eq-nom">${esc(e.marca)} ${esc(e.modelo)}</span><br>
+        <span class="eq-sub">${trabajando(e) ? esc(e.responsable || (e.tipo==='camion'?'Sin conductor':'Sin operador')) : estOp(e).txt}</span></span>
+        <span class="dot ${estadoEquipo(e)}"></span>
+      </button>`).join('');
+  const eqs = data.equipos.filter(ok);
+  $('#lista').innerHTML = grupo('Máquinas de campo', eqs.filter(e=>e.tipo==='maquina'))
+    + grupo('Camiones', eqs.filter(e=>e.tipo==='camion'))
+    + (eqs.length ? '' : '<div class="vacio-msg">Ningún equipo coincide con la búsqueda.</div>');
+  $('#lista').querySelectorAll('.eq').forEach(b => b.onclick = () => abrirFicha(b.dataset.id));
+}
+function abrirFicha(id){
+  sel = id; vista = 'fichas';
+  document.body.dataset.mobile = 'ficha';
+  pintarNav(); pintarLista(); pintarMain();
+}
+
+/* =====================================================================
+   Tablero
+   ===================================================================== */
+function pintarTablero(){
+  const cont = {venc:0, prox:0, ok:0, na:0};
+  data.equipos.forEach(e => cont[estadoEquipo(e)]++);
+  const lista = pendientes(null);
+  const parados = data.equipos.filter(e => !trabajando(e));
+  const sinRef = data.planes.reduce((s,p) => s + faltanRefsPlan(p), 0);
+
+  /* Carga de trabajo proyectada: cuántos cambios caen en cada mes */
+  const meses = proximosMeses(6);
+  const cuenta = {};
+  pendientes(190).forEach(({p}) => { if(p.fecha){ const k = p.fecha.slice(0,7); cuenta[k] = (cuenta[k]||0)+1; } });
+  const hayCarga = meses.some(m => cuenta[m.clave]);
+  const carga = hayCarga ? `
+      <h2>Carga de los próximos meses</h2>
+      <p class="hint">Cambios que caen en cada mes según las proyecciones. Sirve para repartir el trabajo del taller y para saber en qué mes se le viene el gasto.</p>
+      <div class="graf">${barrasV(meses.map(m => ({etiqueta:m.etiqueta, valor:cuenta[m.clave]||0, texto:String(cuenta[m.clave]||0)})))}</div>`
+    : '';
+
+  $('#main').innerHTML = `
+    <section class="bloque" style="padding-top:24px">
+      <h1 class="titulo-vista">Estado de la flota</h1>
+      <p class="hint">${data.equipos.length} equipos sobre ${data.planes.length} hojas de configuración. Las fechas se estiman con el uso diario de cada equipo, calculado con las lecturas del horómetro o del odómetro.</p>
+      <div class="tarjetas">
+        <div class="tarjeta venc"><div class="n">${cont.venc}</div><div class="t">Equipos con algo vencido</div></div>
+        <div class="tarjeta prox"><div class="n">${cont.prox}</div><div class="t">Con cambio próximo</div></div>
+        <div class="tarjeta ok"><div class="n">${cont.ok}</div><div class="t">Al día</div></div>
+        <div class="tarjeta"><div class="n">${cont.na}</div><div class="t">Sin ningún cambio registrado</div></div>
+        <div class="tarjeta"><div class="n">${parados.length}</div><div class="t">No están trabajando</div></div>
+      </div>
+      ${parados.length ? `<p class="hint">Sin proyección de fechas por no estar operando: ${parados.map(e=>'<strong class="mono">'+esc(e.codigo)+'</strong> ('+estOp(e).txt.toLowerCase()+')').join(', ')}. Tampoco entran en la requisición.</p>` : ''}
+      ${sinRef ? `<p class="hint">Faltan <strong>${sinRef}</strong> referencias por digitar en la configuración. Sin referencia, la requisición sale incompleta.</p>` : ''}
+      ${carga}
+      <h2>Qué hay que atender</h2>
+      <p class="hint">Vencidos primero, luego lo que se acerca. Toque una fila para abrir la ficha.</p>
+      ${lista.length ? `<table><thead><tr>
+          <th>Equipo</th><th>Componente</th><th>Referencia</th>
+          <th class="num">Faltan</th><th class="num">Fecha estimada</th><th>Estado</th>
+        </tr></thead><tbody>${lista.map(({eq,it,p}) => `
+          <tr class="clic" data-id="${eq.id}">
+            <td><strong class="mono">${esc(eq.codigo)}</strong> <span style="color:var(--steel)">${esc(eq.modelo)}</span></td>
+            <td>${esc(it.componente)}</td>
+            <td class="ref mono ${it.referencia?'':'vacio'}">${it.referencia?esc(it.referencia):'sin referencia'}</td>
+            <td class="num mono">${p.restante > 0 ? nfmt(p.restante)+' '+u(eq) : nfmt(Math.abs(p.restante))+' '+u(eq)+' pasados'}</td>
+            <td class="num">${p.fecha ? fechaCorta(p.fecha)+' · '+textoDias(p.dias) : (p.parado ? '<span style="color:var(--steel)">'+estOp(eq).txt.toLowerCase()+'</span>' : '—')}</td>
+            <td><span class="badge ${p.clave}">${p.txt}</span></td>
+          </tr>`).join('')}</tbody></table>`
+        : '<div class="vacio-msg">Nada vencido ni próximo. Registre lecturas y cambios para que el tablero se llene.</div>'}
+    </section>`;
+  $('#main').querySelectorAll('tr.clic').forEach(t => t.onclick = () => abrirFicha(t.dataset.id));
+}
+
+/* =====================================================================
+   Configuración: hojas por modelo
+   ===================================================================== */
+function pintarPlanes(){
+  if(planSel) return pintarPlanDetalle(planPorId(planSel));
+  const fila = p => {
+    const eqs = equiposDePlan(p.id);
+    const faltan = faltanRefsPlan(p);
+    return `<button class="plan" data-id="${p.id}">
+      <span><span class="pn">${esc(p.nombre)}</span><br>
+      <span class="pd">${p.items.length} elementos · se mide en ${p.medidor==='km'?'kilómetros':'horas'}</span></span>
+      <span class="pright">${eqs.length} equipo(s): <span class="mono">${eqs.map(e=>esc(e.codigo)).join(', ') || '—'}</span><br>
+      ${faltan ? `<span class="badge prox">${faltan} sin referencia</span>` : '<span class="badge ok">Completa</span>'}</span>
+    </button>`;
+  };
+  const maq = data.planes.filter(p => p.medidor !== 'km');
+  const cam = data.planes.filter(p => p.medidor === 'km');
+  $('#main').innerHTML = `
+    <section class="bloque" style="padding-top:24px">
+      <h1 class="titulo-vista">Hojas de configuración</h1>
+      <p class="hint">Aquí se define qué filtros y aceites lleva cada modelo, con qué referencia, en qué cantidad y cada cuánto se cambian. Los tractores se configuran por horas de horómetro; los camiones por kilómetros. Una hoja sirve para todos los equipos del mismo modelo, así que la referencia se digita una sola vez.</p>
+      <h2>Máquinas de campo — intervalos en horas</h2>
+      <p class="hint">${maq.length} hoja(s)</p>
+      ${maq.map(fila).join('') || '<div class="vacio-msg">Sin hojas de máquinas.</div>'}
+      <h2 style="margin-top:22px">Camiones — intervalos en kilómetros</h2>
+      <p class="hint">${cam.length} hoja(s)</p>
+      ${cam.map(fila).join('') || '<div class="vacio-msg">Sin hojas de camiones.</div>'}
+      <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none;margin-top:16px">
+        <button class="btn sec" id="nueva-maq">+ Nueva hoja de máquina</button>
+        <button class="btn sec" id="nueva-cam">+ Nueva hoja de camión</button>
+      </div>
+    </section>`;
+  $('#main').querySelectorAll('.plan').forEach(b => b.onclick = () => { planSel = b.dataset.id; pintarMain(); });
+  $('#nueva-maq').onclick = () => modalPlanNuevo('maquina');
+  $('#nueva-cam').onclick = () => modalPlanNuevo('camion');
+}
+
+function pintarPlanDetalle(plan){
+  if(!plan){ planSel = null; return pintarPlanes(); }
+  const eqs = equiposDePlan(plan.id);
+  const um = plan.medidor === 'km' ? 'km' : 'h';
+  const tabla = cat => {
+    const its = plan.items.filter(i => i.categoria === cat);
+    if(!its.length) return '<div class="vacio-msg">Nada en esta sección.</div>';
+    return `<table><thead><tr>
+        <th>Componente</th><th>Referencia</th><th class="num">Cantidad</th><th class="num">Cambio cada</th><th></th>
+      </tr></thead><tbody>${its.map(i => `
+        <tr><td>${esc(i.componente)}</td>
+          <td class="ref mono ${i.referencia?'':'vacio'}">${i.referencia?esc(i.referencia):'falta digitar'}</td>
+          <td class="num">${i.cantidad ? esc(i.cantidad)+' '+esc(i.unidad) : '—'}</td>
+          <td class="num mono">${i.intervalo ? nfmt(i.intervalo)+' '+um : '—'}</td>
+          <td><button class="linkbtn" data-item="${i.id}">Editar</button></td></tr>`).join('')}
+      </tbody></table>`;
+  };
+  $('#main').innerHTML = `
+    <button class="backbtn" id="volver-planes" style="display:inline-flex">‹ Todas las hojas</button>
+    <section class="bloque" style="padding-top:10px">
+      <h1 class="titulo-vista">${esc(plan.nombre)}</h1>
+      <p class="hint">Se mide en ${plan.medidor==='km'?'kilómetros':'horas'}. Aplica a ${eqs.length} equipo(s): <span class="mono">${eqs.map(e=>esc(e.codigo)).join(', ') || 'ninguno todavía'}</span>. Lo que cambie aquí se refleja en todos ellos.</p>
+      <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
+        <button class="btn" id="plan-item">+ Agregar elemento</button>
+        <button class="btn sec" id="plan-editar">Renombrar hoja</button>
+        <button class="btn sec" id="plan-duplicar">Duplicar hoja</button>
+        <button class="btn danger" id="plan-borrar">Eliminar hoja</button>
+      </div>
+      <h2>Filtros</h2>${tabla('filtro')}
+      <h2 style="margin-top:20px">Lubricantes y refrigerante</h2>${tabla('lubricante')}
+    </section>`;
+  $('#volver-planes').onclick = () => { planSel = null; pintarMain(); };
+  $('#plan-item').onclick = () => modalItemPlan(plan, null);
+  $('#main').querySelectorAll('[data-item]').forEach(b => b.onclick = () => modalItemPlan(plan, plan.items.find(i => i.id === b.dataset.item)));
+  $('#plan-editar').onclick = () => modalPlanNombre(plan);
+  $('#plan-duplicar').onclick = async () => {
+    const copia = {id:nid(), nombre:plan.nombre+' (copia)', tipo:plan.tipo, medidor:plan.medidor,
+                   items:plan.items.map(i => Object.assign({}, i, {id:nid()}))};
+    data.planes.push(copia); planSel = copia.id;
+    await persistir(); pintarMain(); avisar('Hoja duplicada');
+  };
+  $('#plan-borrar').onclick = () => {
+    if(eqs.length) return toast('Primero reasigne los '+eqs.length+' equipo(s) que usan esta hoja.');
+    confirmar('Eliminar hoja', 'Se borra la configuración "'+plan.nombre+'".', async () => {
+      data.planes = data.planes.filter(p => p.id !== plan.id);
+      planSel = null; await persistir(); pintarMain(); avisar('Hoja eliminada');
+    });
+  };
+}
+
+function modalPlanNuevo(tipo){
+  abrir(`<h3>Nueva hoja de configuración</h3>
+    <div class="body">
+      <label class="f">Nombre del modelo<input id="n" placeholder="${tipo==='camion'?'Chevrolet NPR':'Kubota M7060'}"></label>
+      <label class="f">Contenido inicial<select id="p">
+        <option value="auto">Plantilla ${tipo==='camion'?'de camión':'de tractor'}</option>
+        <option value="vacia">Hoja en blanco</option></select></label>
+      <p class="hint" style="margin:0;color:var(--steel);font-size:13px">Los intervalos quedarán en ${tipo==='camion'?'kilómetros':'horas'}.</p>
+    </div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Crear</button></div>`,
+    () => { $('#ok').onclick = async () => {
+      const n = $('#n').value.trim();
+      if(!n) return toast('Escriba el nombre del modelo.');
+      const plan = crearPlan(n, tipo);
+      if($('#p').value === 'vacia') plan.items = [];
+      data.planes.push(plan); planSel = plan.id; vista = 'planes';
+      await persistir(); cerrar(); pintarNav(); pintarMain(); avisar('Hoja creada');
+    };});
+}
+function modalPlanNombre(plan){
+  abrir(`<h3>Renombrar hoja</h3>
+    <div class="body"><label class="f">Nombre<input id="n" value="${esc(plan.nombre)}"></label></div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
+    () => { $('#ok').onclick = async () => {
+      const n = $('#n').value.trim();
+      if(!n) return toast('El nombre no puede quedar vacío.');
+      plan.nombre = n; await persistir(); cerrar(); pintarMain(); avisar('Hoja renombrada');
+    };});
+}
+function modalItemPlan(plan, it){
+  const nuevo = !it;
+  const um = plan.medidor === 'km' ? 'km' : 'h';
+  const eqs = equiposDePlan(plan.id);
+  it = it || {id:nid(), categoria:'filtro', componente:'', referencia:'', cantidad:null, unidad:'und', intervalo:null};
+  abrir(`<h3>${nuevo?'Agregar elemento':'Editar elemento'} — ${esc(plan.nombre)}</h3>
+    <div class="body">
+      ${eqs.length>1 ? `<div class="aviso">Este cambio aplica a los ${eqs.length} equipos con esta hoja: ${eqs.map(e=>esc(e.codigo)).join(', ')}.</div>` : ''}
+      <div class="fila">
+        <label class="f">Tipo<select id="cat">
+          <option value="filtro" ${it.categoria==='filtro'?'selected':''}>Filtro</option>
+          <option value="lubricante" ${it.categoria==='lubricante'?'selected':''}>Lubricante</option></select></label>
+        <label class="f">Componente<input id="comp" value="${esc(it.componente)}" placeholder="Filtro de aceite de motor"></label>
+      </div>
+      <label class="f">Referencia<input id="ref" class="mono" value="${esc(it.referencia)}" placeholder="HH150-32430"></label>
+      <div class="fila">
+        <label class="f">Cantidad<input type="number" step="0.1" id="cant" value="${it.cantidad??''}"></label>
+        <label class="f">Unidad<select id="uni">${['und','gal','L','kg'].map(x=>`<option ${it.unidad===x?'selected':''}>${x}</option>`).join('')}</select></label>
+        <label class="f">Cambio cada (${um})<input type="number" id="int" value="${it.intervalo??''}"></label>
+      </div>
+    </div>
+    <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar</button>'}
+      <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
+    () => {
+      $('#ok').onclick = async () => {
+        const comp = $('#comp').value.trim();
+        if(!comp) return toast('Escriba el nombre del componente.');
+        Object.assign(it, {categoria:$('#cat').value, componente:comp, referencia:$('#ref').value.trim(),
+          cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
+          intervalo:$('#int').value===''?null:Number($('#int').value)});
+        if(nuevo) plan.items.push(it);
+        await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Configuración guardada');
+      };
+      const d = $('#del');
+      if(d) d.onclick = () => confirmar('Eliminar elemento',
+        'Se quita "'+it.componente+'" de la hoja '+plan.nombre+' y de los '+eqs.length+' equipo(s) que la usan.', async () => {
+          plan.items = plan.items.filter(x => x.id !== it.id);
+          eqs.forEach(e => { if(e.estado) delete e.estado[it.id]; });
+          await persistir(); pintarLista(); pintarMain(); avisar('Elemento eliminado');
+        });
+    });
+}
+
+/* =====================================================================
+   Requisición
+   ===================================================================== */
+function agruparRequisicion(dias){
+  const map = new Map();
+  pendientes(dias).forEach(({eq,it,p}) => {
+    const clave = (it.referencia || 'SIN-REF · '+it.componente).toUpperCase();
+    if(!map.has(clave)) map.set(clave, {referencia:it.referencia, componente:it.componente, unidad:it.unidad, cantidad:0, equipos:[], dias:p.dias, fecha:p.fecha});
+    const g = map.get(clave);
+    g.cantidad += Number(it.cantidad) || 0;
+    g.equipos.push(eq.codigo);
+    if(p.dias != null && (g.dias == null || p.dias < g.dias)){ g.dias = p.dias; g.fecha = p.fecha; }
+  });
+  return [...map.values()].sort((a,b) => (a.dias ?? 9e9) - (b.dias ?? 9e9));
+}
+function descargar(blob, nombre){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nombre; a.click();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); }catch(e){} }, 1000);
+}
+function pintarRequisicion(){
+  const dias = data.config.horizonte ?? 30;
+  const filas = agruparRequisicion(dias);
+  const excluidos = data.equipos.filter(e => !trabajando(e));
+  $('#main').innerHTML = `
+    <section class="bloque" style="padding-top:24px">
+      <h1 class="titulo-vista">Requisición de filtros y lubricantes</h1>
+      <p class="hint">Todo lo que vence dentro del horizonte, consolidado por referencia y listo para llevar al comité de compras.</p>
+      <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
+        <label class="f" style="margin:0;max-width:210px">Horizonte
+          <select id="hz">${[15,30,45,60,90].map(d=>`<option value="${d}" ${d===dias?'selected':''}>Próximos ${d} días</option>`).join('')}</select>
+        </label>
+        <button class="btn sec" id="req-copiar">Copiar como texto</button>
+        <button class="btn sec" id="req-csv">Descargar CSV</button>
+      </div>
+      ${filas.length ? `<table><thead><tr>
+          <th>Referencia</th><th>Componente</th><th class="num">Cantidad</th><th>Equipos</th><th class="num">Se necesita</th>
+        </tr></thead><tbody>${filas.map(f => `
+          <tr><td class="mono ${f.referencia?'':'ref vacio'}">${f.referencia?esc(f.referencia):'falta digitar'}</td>
+            <td>${esc(f.componente)}</td>
+            <td class="num mono">${f.cantidad ? nfmt(f.cantidad)+' '+esc(f.unidad) : '—'}</td>
+            <td class="mono" style="font-size:13px">${f.equipos.map(esc).join(', ')}</td>
+            <td class="num">${f.fecha ? fechaCorta(f.fecha)+' · '+textoDias(f.dias) : '—'}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="2">${filas.length} referencia(s)</td>
+          <td class="num mono">${nfmt(filas.reduce((s,f)=>s+f.cantidad,0))}</td><td colspan="2"></td></tr></tfoot></table>
+        <p class="hint" style="margin-top:12px">Las filas sin referencia salen igual, para que no se le escape ese repuesto; complétela en la hoja de configuración del modelo.${excluidos.length ? ' No se pidió nada para '+excluidos.map(e=>esc(e.codigo)).join(', ')+', que no están operando.' : ''}</p>`
+      : `<div class="vacio-msg">No hay nada por pedir en ese plazo.${excluidos.length ? '<br>'+excluidos.map(e=>esc(e.codigo)).join(', ')+' no entran porque no están operando.' : ''}</div>`}
+    </section>`;
+  $('#hz').onchange = async e => { data.config.horizonte = Number(e.target.value); await persistir(); pintarRequisicion(); };
+  const texto = () => 'REQUISICION - Filtros y lubricantes | Palma Grande | '+hoy()+'\nProximos '+dias+' dias\n\n' +
+    filas.map(f => (f.referencia||'(sin referencia)')+' | '+f.componente+' | '+(f.cantidad||'?')+' '+f.unidad+' | '+f.equipos.join(', ')).join('\n');
+  $('#req-copiar').onclick = async () => {
+    try{ await navigator.clipboard.writeText(texto()); toast('Requisición copiada'); }
+    catch(e){ toast('No se pudo copiar. Use la descarga en CSV.'); }
+  };
+  $('#req-csv').onclick = () => {
+    const csv = 'Referencia;Componente;Cantidad;Unidad;Equipos;Fecha estimada\n' +
+      filas.map(f => [f.referencia||'', f.componente, f.cantidad||'', f.unidad, f.equipos.join(' '), f.fecha||''].join(';')).join('\n');
+    descargar(new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'}), 'requisicion-'+hoy()+'.csv');
+    toast('CSV descargado');
+  };
+}
+
+/* =====================================================================
+   Referencias
+   ===================================================================== */
+function pintarReferencias(){
+  const map = new Map();
+  data.equipos.forEach(eq => itemsDe(eq).forEach(it => {
+    if(!it.referencia) return;
+    const k = it.referencia.trim().toUpperCase();
+    if(!map.has(k)) map.set(k, {referencia:it.referencia.trim(), componentes:new Set(), unidad:it.unidad, equipos:[], anual:0});
+    const g = map.get(k);
+    g.componentes.add(it.componente); g.equipos.push(eq.codigo);
+    if(it.intervalo && it.cantidad && trabajando(eq)) g.anual += (usoDiario(eq).valor*365/it.intervalo) * Number(it.cantidad);
+  }));
+  const filas = [...map.values()].sort((a,b) => b.equipos.length - a.equipos.length || a.referencia.localeCompare(b.referencia));
+  const compartidas = filas.filter(f => f.equipos.length > 1).length;
+  $('#main').innerHTML = `
+    <section class="bloque" style="padding-top:24px">
+      <h1 class="titulo-vista">Catálogo de referencias</h1>
+      <p class="hint">Qué referencia sirve para cuáles equipos y cuánto se consume al año. Sirve para negociar por volumen y para decidir qué vale la pena tener en almacén.</p>
+      ${filas.length ? `
+        <div class="tarjetas">
+          <div class="tarjeta"><div class="n">${filas.length}</div><div class="t">Referencias distintas</div></div>
+          <div class="tarjeta"><div class="n">${compartidas}</div><div class="t">Se usan en más de un equipo</div></div>
+        </div>
+        <table><thead><tr><th>Referencia</th><th>Componente</th><th class="num">Equipos</th><th>Cuáles</th><th class="num">Consumo al año</th></tr></thead>
+        <tbody>${filas.map(f => `<tr>
+          <td class="mono"><strong>${esc(f.referencia)}</strong></td>
+          <td>${[...f.componentes].map(esc).join(' · ')}</td>
+          <td class="num">${f.equipos.length}</td>
+          <td class="mono" style="font-size:13px">${f.equipos.map(esc).join(', ')}</td>
+          <td class="num mono">${f.anual ? f.anual.toFixed(1)+' '+esc(f.unidad) : '—'}</td></tr>`).join('')}</tbody></table>
+        <p class="hint" style="margin-top:12px">El consumo al año se calcula con el uso diario de cada equipo y el intervalo de cambio. Es un estimado para pedir, no un dato contable.</p>`
+      : '<div class="vacio-msg">Todavía no hay referencias digitadas. Vaya a Configuración y llene la hoja de cada modelo.</div>'}
+    </section>`;
+}
+
+/* =====================================================================
+   Costos
+   ===================================================================== */
+function costoEquipo(eq){
+  const h = data.historial.filter(x => x.equipoId === eq.id);
+  const total = h.reduce((s,x) => s + (Number(x.costo)||0), 0);
+  const lecturas = h.map(x => Number(x.lectura)).filter(n => n > 0);
+  const periodo = lecturas.length ? Math.max(0, Number(eq.lectura||0) - Math.min(...lecturas)) : 0;
+  return {cambios:h.length, total, periodo, unitario: periodo > 0 ? total/periodo : null};
+}
+function pintarCostos(){
+  const filas = data.equipos.map(eq => Object.assign({eq}, costoEquipo(eq)))
+                            .sort((a,b) => (b.unitario ?? -1) - (a.unitario ?? -1));
+  const total = filas.reduce((s,f) => s + f.total, 0);
+  const conDato = filas.filter(f => f.unitario != null).length;
+
+  /* Gráfica 1: costo por hora, agrupado por modelo para comparar iguales con iguales */
+  let comparativo = '';
+  const conCosto = filas.filter(f => f.unitario != null && f.cambios >= 2);
+  if(conCosto.length){
+    const maxGlobal = Math.max(...conCosto.map(f => f.unitario));
+    const grupos = new Map();
+    conCosto.forEach(f => {
+      const plan = planPorId(f.eq.planId);
+      const k = plan ? plan.nombre : 'Sin hoja asignada';
+      if(!grupos.has(k)) grupos.set(k, []);
+      grupos.get(k).push(f);
+    });
+    comparativo = `<div class="graf">${[...grupos.entries()].map(([nombre, fs]) => `
+        <div class="gb-grupo">${esc(nombre)}</div>
+        ${barrasH(fs.map(f => ({
+          etiqueta: f.eq.codigo+' '+f.eq.modelo,
+          valor: f.unitario,
+          alto: f.unitario >= maxGlobal*0.9 && conCosto.length > 1,
+          texto: money(f.unitario)+' / '+u(f.eq)
+        })))}`).join('')}</div>`;
+  }
+
+  /* Gráfica 2: gasto por mes */
+  const meses = ultimosMeses(12);
+  const porMes = {};
+  data.historial.forEach(h => {
+    if(!h.fecha || !h.costo) return;
+    const k = h.fecha.slice(0,7);
+    porMes[k] = (porMes[k]||0) + Number(h.costo);
+  });
+  const hayMes = meses.some(m => porMes[m.clave]);
+  const mensual = hayMes ? barrasV(meses.map(m => ({
+    etiqueta: m.etiqueta, valor: porMes[m.clave]||0,
+    texto: (porMes[m.clave]||0) >= 1000000 ? ((porMes[m.clave]/1000000).toFixed(1)+'M') : Math.round((porMes[m.clave]||0)/1000)+'k'
+  }))) : '';
+
+  const graficas = (comparativo || mensual) ? `
+      <h2>Comparación entre equipos</h2>
+      <p class="hint">Agrupado por modelo: dos máquinas iguales deberían costar parecido. La barra ámbar es la más cara de la flota.</p>
+      ${comparativo || '<div class="vacio-msg">Todavía ningún equipo tiene dos cambios registrados. Con uno solo el costo por hora sale disparado, por eso no se grafica; abajo sí aparece en la tabla.</div>'}
+      ${mensual ? `<h2 style="margin-top:22px">Gasto por mes</h2>
+        <p class="hint">Suma de lo registrado en cada mes, en miles de pesos.</p>
+        <div class="graf">${mensual}</div>` : ''}`
+    : `<div class="vacio-msg">Las gráficas aparecen cuando registre cambios con su costo. Con dos o tres por equipo ya se puede comparar.</div>`;
+
+  $('#main').innerHTML = `
+    <section class="bloque" style="padding-top:24px">
+      <h1 class="titulo-vista">Costo de mantenimiento</h1>
+      <p class="hint">Se calcula con los costos que usted registra en cada cambio, sobre las horas o kilómetros corridos desde el primer cambio registrado. Necesita al menos dos cambios en un equipo para que el dato sirva.</p>
+      <div class="tarjetas">
+        <div class="tarjeta"><div class="n" style="font-size:22px">${money(total)}</div><div class="t">Costo acumulado registrado</div></div>
+        <div class="tarjeta"><div class="n">${data.historial.length}</div><div class="t">Cambios registrados</div></div>
+        <div class="tarjeta"><div class="n">${conDato}</div><div class="t">Equipos con costo por hora calculable</div></div>
+      </div>
+      ${graficas}
+      <h2 style="margin-top:22px">Detalle por equipo</h2>
+      <p class="hint">Ordenado del más costoso al más barato.</p>
+      <table><thead><tr><th>Equipo</th><th class="num">Cambios</th><th class="num">Costo total</th>
+        <th class="num">Período corrido</th><th class="num">Costo por hora o km</th></tr></thead>
+      <tbody>${filas.map(f => `<tr class="clic" data-id="${f.eq.id}">
+        <td><strong class="mono">${esc(f.eq.codigo)}</strong> <span style="color:var(--steel)">${esc(f.eq.marca)} ${esc(f.eq.modelo)}</span></td>
+        <td class="num">${f.cambios || '—'}</td>
+        <td class="num mono">${f.total ? money(f.total) : '—'}</td>
+        <td class="num mono">${f.periodo ? nfmt(f.periodo)+' '+u(f.eq) : '—'}</td>
+        <td class="num mono">${f.unitario != null ? money(f.unitario)+' / '+u(f.eq) : '—'}</td></tr>`).join('')}</tbody></table>
+    </section>`;
+  $('#main').querySelectorAll('tr.clic').forEach(t => t.onclick = () => abrirFicha(t.dataset.id));
+}
+
+/* =====================================================================
+   Ficha del equipo
+   ===================================================================== */
+function tablaItems(eq, categoria){
+  const items = itemsDe(eq).filter(i => i.categoria === categoria);
+  if(!items.length) return '<div class="vacio-msg">Todavía no hay elementos en esta sección.</div>';
+  return `<table><thead><tr>
+      <th>Componente</th><th>Referencia</th><th class="num">Cantidad</th><th class="num">Cada</th>
+      <th class="num">Último cambio</th><th class="num">Faltan</th><th class="num">Fecha estimada</th><th>Estado</th><th></th>
+    </tr></thead><tbody>` + items.map(it => {
+      const p = proyeccion(eq,it);
+      return `<tr>
+        <td>${esc(it.componente)}${it.origen==='propio'?' <span class="badge propio">solo este equipo</span>':''}</td>
+        <td class="ref mono ${it.referencia?'':'vacio'}">${it.referencia?esc(it.referencia):'sin referencia'}</td>
+        <td class="num">${it.cantidad ? esc(it.cantidad)+' '+esc(it.unidad) : '—'}</td>
+        <td class="num mono">${it.intervalo ? nfmt(it.intervalo)+' '+u(eq) : '—'}</td>
+        <td class="num mono">${it.ultLectura!=null ? nfmt(it.ultLectura)+' '+u(eq) : '—'}</td>
+        <td class="num mono">${p.restante!=null ? (p.restante>0 ? nfmt(p.restante)+' '+u(eq) : nfmt(Math.abs(p.restante))+' '+u(eq)+' pasados') : '—'}</td>
+        <td class="num">${p.fecha ? fechaCorta(p.fecha) : '—'}</td>
+        <td><span class="badge ${p.clave}">${p.txt}</span></td>
+        <td><button class="linkbtn" data-edit-item="${it.id}">Editar</button></td>
+      </tr>`;
+    }).join('') + '</tbody></table>';
+}
+
+function pintarFicha(){
+  const eq = eqPorId(sel);
+  if(!eq){ $('#main').innerHTML = '<section class="bloque" style="padding-top:24px"><div class="vacio-msg">Seleccione un equipo de la lista para ver su ficha.</div></section>'; return; }
+  const plan = planPorId(eq.planId);
+  const uso = usoDiario(eq);
+  const hist = data.historial.filter(h => h.equipoId === eq.id).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  const c = costoEquipo(eq);
+  const sinRef = itemsDe(eq).filter(i => !i.referencia).length;
+
+  $('#main').innerHTML = `
+    <button class="backbtn" id="volver">‹ Equipos</button>
+    <div class="fichahead">
+      <button class="fichafoto" id="foto-grande" title="${fotos[eq.id]?'Cambiar la foto':'Agregar una foto'}">
+        ${fotos[eq.id] ? `<img src="${fotos[eq.id]}" alt="Foto de ${esc(eq.codigo)}">` : silueta(eq)}
+      </button>
+      <div>
+        <div class="cod mono">${esc(eq.codigo)}</div>
+        <div class="nom">${esc(eq.marca)} ${esc(eq.modelo)}</div>
+        <div class="meta">${eq.tipo==='camion'?'Camión':'Máquina de campo'}${eq.placa?' · Placa '+esc(eq.placa):''}${eq.serie?' · Serie '+esc(eq.serie):''}${eq.responsable?' · '+esc(eq.responsable):''}${eq.notas?' · '+esc(eq.notas):''}</div>
+        <div class="meta"><span class="badge ${estOp(eq).badge}">${estOp(eq).txt}</span> Configuración: <strong>${plan?esc(plan.nombre):'sin asignar'}</strong> · Uso ${uso.fuente==='medido'?'medido':'estimado'} ${uso.valor.toFixed(1)} ${u(eq)}/día${c.unitario!=null?' · '+money(c.unitario)+' por '+u(eq):''}</div>
+      </div>
+      <div class="lectura">
+        <div class="val mono">${nfmt(eq.lectura)} ${u(eq)}</div>
+        <div class="lbl">${eq.medidor==='km'?'Kilometraje':'Horómetro'}${eq.lecturaFecha?' · '+esc(eq.lecturaFecha):''}</div>
+        <button id="btn-lectura">Actualizar lectura</button>
+      </div>
+    </div>
+
+    ${!trabajando(eq) ? `<div class="barra" style="background:var(--amber-soft);border-bottom-color:#E8D3B4">
+      <span style="color:#7A430A;font-size:13px">Este equipo está marcado como <strong>${estOp(eq).txt.toLowerCase()}</strong>. Mientras siga así no se calculan fechas estimadas y no entra en la requisición.</span></div>` : ''}
+    <div class="barra">
+      <button class="btn" id="btn-cambio">Registrar cambio</button>
+      <button class="btn sec" id="btn-item">Agregar filtro o aceite</button>
+      <button class="btn sec" id="btn-plan">Ver configuración del modelo</button>
+      <button class="btn sec" id="btn-estado">Cambiar estado</button>
+      <button class="btn sec" id="btn-editeq">Editar datos</button>
+      <button class="btn sec" id="btn-foto">${fotos[eq.id]?'Cambiar foto':'Agregar foto'}</button>
+      ${fotos[eq.id] ? '<button class="btn sec" id="btn-foto-del">Quitar foto</button>' : ''}
+      <button class="btn sec" id="btn-imprimir">Imprimir ficha</button>
+      ${sinRef ? `<span class="badge prox">${sinRef} sin referencia</span>` : ''}
+    </div>
+
+    <section class="bloque"><h2>Filtros</h2>
+      <p class="hint">Referencias e intervalos vienen de la hoja de ${plan?esc(plan.nombre):'configuración'}. El último cambio es propio de este equipo.</p>
+      ${tablaItems(eq,'filtro')}</section>
+
+    <section class="bloque"><h2>Lubricantes y refrigerante</h2>
+      <p class="hint">Cantidad en galones o litros, según como se despache de almacén.</p>
+      ${tablaItems(eq,'lubricante')}</section>
+
+    <section class="bloque"><h2>Identificación en campo</h2>
+      <p class="hint">Imprima este código, plastifíquelo y péguelo en la máquina. Al escanearlo con el celular abre esta ficha.</p>
+      <div class="qr-caja">
+        <div id="qr-ficha"></div>
+        <div class="qr-txt"><strong class="mono">${esc(eq.codigo)}</strong><br>
+          ${data.config.urlBase ? 'Apunta a '+esc(data.config.urlBase)+'#'+esc(eq.codigo)
+            : 'Falta la dirección del aplicativo. Configúrela en la pestaña Datos para que el código abra la ficha; por ahora solo lleva el código del equipo.'}
+        </div>
+      </div></section>
+
+    <section class="bloque"><h2>Historial de cambios</h2>
+      <p class="hint">${hist.length ? hist.length+' registro(s)'+(c.total?' · '+money(c.total)+' acumulado':'') : ''}</p>
+      ${hist.length ? `<table><thead><tr>
+          <th>Fecha</th><th class="num">${eq.medidor==='km'?'Km':'Horómetro'}</th><th>Se cambió</th><th>Responsable</th><th class="num">Costo</th><th></th>
+        </tr></thead><tbody>${hist.map(h => `
+          <tr><td class="mono">${esc(h.fecha)}</td>
+            <td class="num mono">${nfmt(h.lectura)}</td>
+            <td>${h.items.map(i => esc(i.componente)+(i.referencia?' <span class="mono" style="color:var(--steel)">'+esc(i.referencia)+'</span>':'')).join('<br>')}
+              ${h.obs?`<div style="color:var(--steel);font-size:13px">${esc(h.obs)}</div>`:''}</td>
+            <td>${esc(h.responsable||'—')}
+              <div style="color:var(--steel);font-size:12px">${fechaHora(h.registrado) ? 'Registrado '+esc(fechaHora(h.registrado))+(desfaseRegistro(h)>1?' ('+desfaseRegistro(h)+' días después)':'') : 'Sin sello de registro'}</div></td>
+            <td class="num mono">${h.costo?money(h.costo):'—'}</td>
+            <td><button class="linkbtn" data-comp="${h.id}">Comprobante</button><br>
+              <button class="linkbtn del" data-del-hist="${h.id}">Eliminar</button></td></tr>`).join('')}</tbody></table>`
+        : '<div class="vacio-msg">Sin cambios registrados. Use “Registrar cambio” cuando se intervenga el equipo.</div>'}
+    </section>`;
+
+  $('#volver').onclick = () => document.body.dataset.mobile = 'lista';
+  $('#btn-lectura').onclick = () => modalLectura(eq);
+  $('#btn-cambio').onclick = () => modalCambio(eq);
+  $('#btn-item').onclick = () => modalItemEquipo(eq, null);
+  $('#btn-plan').onclick = () => { if(!plan) return toast('Este equipo no tiene hoja asignada.'); vista='planes'; planSel=plan.id; pintarNav(); pintarMain(); };
+  $('#btn-estado').onclick = () => modalEstado(eq);
+  $('#btn-editeq').onclick = () => modalEquipo(eq);
+  $('#btn-foto').onclick = () => elegirFoto(eq);
+  $('#foto-grande').onclick = () => elegirFoto(eq);
+  $('#btn-imprimir').onclick = () => imprimirFicha(eq);
+  const bd = $('#btn-foto-del');
+  if(bd) bd.onclick = () => confirmar('Quitar foto', 'Se borra la foto de '+eq.codigo+'. La ficha y el historial quedan intactos.', async () => {
+    delete fotos[eq.id]; await DB.guardarFotos(fotos); pintarLista(); pintarMain(); toast('Foto eliminada');
+  });
+  $('#main').querySelectorAll('[data-edit-item]').forEach(b => b.onclick = () => {
+    const it = itemsDe(eq).find(i => i.id === b.dataset.editItem);
+    if(it) modalItemEquipo(eq, it);
+  });
+  $('#main').querySelectorAll('[data-comp]').forEach(b => b.onclick = () => {
+    const h = data.historial.find(x => x.id === b.dataset.comp);
+    if(h) imprimirComprobante(h);
+  });
+  $('#main').querySelectorAll('[data-del-hist]').forEach(b => b.onclick = async () => {
+    data.historial = data.historial.filter(h => h.id !== b.dataset.delHist);
+    await persistir(); pintarMain(); avisar('Registro eliminado');
+  });
+  dibujarQR($('#qr-ficha'), textoQR(eq), 112);
+}
+
+/* Edición desde la ficha: definición (plan o propio) + último cambio de este equipo */
+function modalItemEquipo(eq, it){
+  const nuevo = !it;
+  const plan = planPorId(eq.planId);
+  const eqs = plan ? equiposDePlan(plan.id) : [];
+  const esPlan = it ? it.origen === 'plan' : true;
+  const base = it || {id:nid(), categoria:'filtro', componente:'', referencia:'', cantidad:null, unidad:'und', intervalo:null, ultLectura:null, ultFecha:''};
+  abrir(`<h3>${nuevo?'Agregar filtro o aceite':'Editar'} — ${esc(eq.codigo)}</h3>
+    <div class="body">
+      ${nuevo ? `<label class="f">¿A quién aplica?<select id="alcance">
+          <option value="plan">A todos los ${eqs.length} equipo(s) con la hoja ${esc(plan?plan.nombre:'')}</option>
+          <option value="propio">Solo a este equipo</option></select></label>`
+        : (esPlan && eqs.length>1 ? `<div class="aviso">Referencia, cantidad e intervalo vienen de la hoja ${esc(plan.nombre)}; al cambiarlos se actualizan los ${eqs.length} equipos: ${eqs.map(e=>esc(e.codigo)).join(', ')}. El último cambio es solo de ${esc(eq.codigo)}.</div>` : '')}
+      <div class="fila">
+        <label class="f">Tipo<select id="cat">
+          <option value="filtro" ${base.categoria==='filtro'?'selected':''}>Filtro</option>
+          <option value="lubricante" ${base.categoria==='lubricante'?'selected':''}>Lubricante</option></select></label>
+        <label class="f">Componente<input id="comp" value="${esc(base.componente)}" placeholder="Filtro de aceite de motor"></label>
+      </div>
+      <label class="f">Referencia<input id="ref" class="mono" value="${esc(base.referencia)}" placeholder="HH150-32430"></label>
+      <div class="fila">
+        <label class="f">Cantidad<input type="number" step="0.1" id="cant" value="${base.cantidad??''}"></label>
+        <label class="f">Unidad<select id="uni">${['und','gal','L','kg'].map(x=>`<option ${base.unidad===x?'selected':''}>${x}</option>`).join('')}</select></label>
+        <label class="f">Cambio cada (${u(eq)})<input type="number" id="int" value="${base.intervalo??''}"></label>
+      </div>
+      <div class="sep">Último cambio en ${esc(eq.codigo)}<small>Este dato es propio del equipo y no afecta a los demás.</small></div>
+      <div class="fila">
+        <label class="f">Se hizo a los (${u(eq)})<input type="number" id="ult" value="${base.ultLectura??''}"></label>
+        <label class="f">Fecha<input type="date" id="ultf" value="${base.ultFecha||''}"></label>
+      </div>
+    </div>
+    <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar</button>'}
+      <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
+    () => {
+      $('#ok').onclick = async () => {
+        const comp = $('#comp').value.trim();
+        if(!comp) return toast('Escriba el nombre del componente.');
+        const def = {categoria:$('#cat').value, componente:comp, referencia:$('#ref').value.trim(),
+          cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
+          intervalo:$('#int').value===''?null:Number($('#int').value)};
+        let id = base.id;
+        if(nuevo){
+          const alPlan = $('#alcance').value === 'plan' && plan;
+          const nuevoIt = Object.assign({id}, def);
+          if(alPlan) plan.items.push(nuevoIt);
+          else { eq.propios = eq.propios || []; eq.propios.push(nuevoIt); }
+        } else if(esPlan && plan){
+          Object.assign(plan.items.find(x => x.id === id), def);
+        } else {
+          Object.assign((eq.propios||[]).find(x => x.id === id), def);
+        }
+        const ul = $('#ult').value === '' ? null : Number($('#ult').value);
+        if(ul == null){ if(eq.estado) delete eq.estado[id]; }
+        else fijarUltimo(eq, id, ul, $('#ultf').value || hoy());
+        await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Guardado');
+      };
+      const d = $('#del');
+      if(d) d.onclick = () => {
+        const alcance = esPlan && plan ? 'la hoja '+plan.nombre+' y de los '+eqs.length+' equipo(s) que la usan' : 'este equipo';
+        confirmar('Eliminar elemento', 'Se quita "'+base.componente+'" de '+alcance+'.', async () => {
+          if(esPlan && plan){
+            plan.items = plan.items.filter(x => x.id !== base.id);
+            eqs.forEach(e => { if(e.estado) delete e.estado[base.id]; });
+          } else {
+            eq.propios = (eq.propios||[]).filter(x => x.id !== base.id);
+            if(eq.estado) delete eq.estado[base.id];
+          }
+          await persistir(); pintarLista(); pintarMain(); avisar('Elemento eliminado');
+        });
+      };
+    });
+}
+
+/* ---------------- QR ---------------- */
+const textoQR = eq => data.config.urlBase ? data.config.urlBase.replace(/#.*$/,'') + '#' + encodeURIComponent(eq.codigo) : eq.codigo;
+function dibujarQR(cont, texto, size){
+  if(!cont) return null;
+  cont.innerHTML = '';
+  if(typeof QRCode === 'undefined'){
+    cont.innerHTML = '<div class="qr-txt" style="width:150px">No se pudo cargar el generador de códigos. Necesita conexión a internet la primera vez que abre el aplicativo.</div>';
+    return null;
+  }
+  try{ new QRCode(cont, {text:texto, width:size, height:size, correctLevel:QRCode.CorrectLevel.M}); return cont; }
+  catch(e){ return null; }
+}
+function qrDataURL(texto, size){
+  const caja = $('#qr-oculto');
+  if(!dibujarQR(caja, texto, size)) return '';
+  const cv = caja.querySelector('canvas');
+  if(cv){ try{ return cv.toDataURL('image/png'); }catch(e){} }
+  const im = caja.querySelector('img');
+  return im ? im.src : '';
+}
+
+/* ---------------- Impresión ---------------- */
+function tablaPrint(eq, categoria, titulo){
+  const items = itemsDe(eq).filter(i => i.categoria === categoria);
+  if(!items.length) return '';
+  return `<h4>${titulo}</h4><table><thead><tr>
+      <th>Componente</th><th>Referencia</th><th>Cantidad</th><th>Cambio cada</th><th>Último cambio</th><th>Próximo a los</th>
+    </tr></thead><tbody>${items.map(it => {
+      const p = proyeccion(eq,it);
+      return `<tr><td>${esc(it.componente)}</td>
+        <td><strong>${it.referencia?esc(it.referencia):'—'}</strong></td>
+        <td>${it.cantidad?esc(it.cantidad)+' '+esc(it.unidad):'—'}</td>
+        <td>${it.intervalo?nfmt(it.intervalo)+' '+u(eq):'—'}</td>
+        <td>${it.ultLectura!=null?nfmt(it.ultLectura)+' '+u(eq)+(it.ultFecha?' · '+it.ultFecha:''):'—'}</td>
+        <td>${p.proximo!=null?nfmt(p.proximo)+' '+u(eq)+(p.fecha?' · '+fechaCorta(p.fecha):''):'—'}</td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+function imprimirComprobante(h){
+  const eq = eqPorId(h.equipoId);
+  if(!eq) return toast('El equipo de ese registro ya no existe.');
+  const plan = planPorId(eq.planId);
+  const sello = fechaHora(h.registrado);
+  const desf = desfaseRegistro(h);
+  const consec = 'MTO-' + (h.fecha||'').replace(/-/g,'') + '-' + esc(eq.codigo).replace(/[^A-Za-z0-9]/g,'');
+  $('#print-area').innerHTML = `
+    <div class="p-comp">
+      <div class="p-head">
+        <div>
+          <div style="font-size:11px;color:#555;letter-spacing:.04em">PALMA GRANDE S.A.S. · PUERTO CONCORDIA, META</div>
+          <div class="p-cod" style="font-size:19px">Comprobante de mantenimiento</div>
+          <div style="font-size:11px;color:#555">Consecutivo <strong>${consec}</strong></div>
+        </div>
+        <div class="p-qr" style="text-align:right;margin-left:auto">
+          <div style="font-size:22px;font-weight:700">${esc(eq.codigo)}</div>
+          <div style="font-size:11px;color:#555">${esc(eq.marca)} ${esc(eq.modelo)}${eq.placa?' · '+esc(eq.placa):''}</div>
+        </div>
+      </div>
+
+      <table class="p-datos"><tbody>
+        <tr><th>Fecha del cambio</th><td>${esc(h.fecha)}</td>
+            <th>${eq.medidor==='km'?'Kilometraje':'Horómetro'}</th><td>${nfmt(h.lectura)} ${u(eq)}</td></tr>
+        <tr><th>Ejecutado por</th><td>${esc(h.responsable||'—')}</td>
+            <th>Costo</th><td>${h.costo?money(h.costo):'—'}</td></tr>
+        <tr><th>Configuración</th><td>${plan?esc(plan.nombre):'—'}</td>
+            <th>Estado del equipo</th><td>${estOp(eq).txt}</td></tr>
+      </tbody></table>
+
+      <h4>Repuestos e insumos aplicados</h4>
+      <table><thead><tr><th style="width:44%">Componente</th><th>Referencia</th><th>Cantidad</th></tr></thead>
+        <tbody>${h.items.map(i => `<tr>
+          <td>${esc(i.componente)}</td>
+          <td><strong>${i.referencia?esc(i.referencia):'—'}</strong></td>
+          <td>${i.cantidad?esc(i.cantidad)+' '+esc(i.unidad||''):'—'}</td></tr>`).join('')}</tbody></table>
+
+      ${h.obs ? `<h4>Observaciones</h4><div style="font-size:11px;border:1px solid #DDD;padding:6px 8px;min-height:34px">${esc(h.obs)}</div>`
+              : '<h4>Observaciones</h4><div style="border:1px solid #DDD;height:34px"></div>'}
+
+      <div class="p-firma"><div>Mecánico que ejecutó</div><div>Coordinador de campo</div><div>Fecha de recibido</div></div>
+
+      <div class="p-pie">
+        ${sello ? 'Registrado en el sistema el '+esc(sello)+(desf>1?' · '+desf+' días después de la fecha declarada del cambio':'')
+                : 'Este registro no tiene sello de registro porque se cargó antes de que el sistema lo capturara.'}<br>
+        Impreso el ${hoy()}. Documento generado por el sistema de fichas técnicas de flota.
+      </div>
+    </div>`;
+  setTimeout(() => window.print(), 150);
+}
+
+function imprimirFicha(eq){
+  const qr = qrDataURL(textoQR(eq), 200);
+  const plan = planPorId(eq.planId);
+  $('#print-area').innerHTML = `
+    <div class="p-head">
+      ${fotos[eq.id] ? `<img class="p-foto" src="${fotos[eq.id]}" alt="">` : ''}
+      <div>
+        <div class="p-cod">${esc(eq.codigo)}</div>
+        <div style="font-size:15px;font-weight:600">${esc(eq.marca)} ${esc(eq.modelo)}</div>
+        <div style="font-size:11px;color:#555">${eq.tipo==='camion'?'Camión':'Máquina de campo'}${eq.placa?' · Placa '+esc(eq.placa):''}${eq.serie?' · Serie '+esc(eq.serie):''}${eq.responsable?' · '+esc(eq.responsable):''}</div>
+        <div style="font-size:11px;color:#555">${eq.medidor==='km'?'Kilometraje':'Horómetro'} al ${esc(eq.lecturaFecha||hoy())}: <strong>${nfmt(eq.lectura)} ${u(eq)}</strong>${plan?' · Configuración '+esc(plan.nombre):''}</div>
+        <div style="font-size:11px;color:#555">Palma Grande S.A.S. · Ficha de filtros y lubricantes</div>
+      </div>
+      ${qr ? `<div class="p-qr"><img src="${qr}" alt="">${esc(eq.codigo)}</div>` : ''}
+    </div>
+    ${tablaPrint(eq,'filtro','Filtros')}
+    ${tablaPrint(eq,'lubricante','Lubricantes y refrigerante')}
+    <div class="p-firma"><div>Mecánico responsable</div><div>Coordinador de campo</div><div>Fecha</div></div>
+    <div class="p-pie">Impreso el ${hoy()}. Las referencias y cantidades deben confirmarse contra el manual del equipo antes de comprar.</div>`;
+  setTimeout(() => window.print(), 150);
+}
+
+/* ---------------- Historial global ---------------- */
+function pintarHistorial(){
+  const hist = [...data.historial].sort((a,b) => b.fecha.localeCompare(a.fecha));
+  const nombre = id => { const e = eqPorId(id); return e ? e.codigo+' '+e.marca+' '+e.modelo : '—'; };
+  const total = hist.reduce((s,h) => s + (Number(h.costo)||0), 0);
+  $('#main').innerHTML = `
+    <section class="bloque" style="padding-top:24px">
+      <h1 class="titulo-vista">Historial de toda la flota</h1>
+      <p class="hint">${hist.length} cambio(s) registrado(s)${total?' · '+money(total)+' acumulado':''}.</p>
+      ${hist.length ? `<table><thead><tr><th>Fecha</th><th>Equipo</th><th class="num">Lectura</th><th>Se cambió</th><th>Responsable</th><th class="num">Costo</th></tr></thead>
+        <tbody>${hist.map(h => `<tr class="clic" data-id="${h.equipoId}">
+          <td class="mono">${esc(h.fecha)}</td><td>${esc(nombre(h.equipoId))}</td>
+          <td class="num mono">${nfmt(h.lectura)}</td>
+          <td>${h.items.map(i => esc(i.componente)).join(', ')}</td>
+          <td>${esc(h.responsable||'—')}</td>
+          <td class="num mono">${h.costo?money(h.costo):'—'}</td></tr>`).join('')}</tbody></table>`
+      : '<div class="vacio-msg">Todavía no hay cambios registrados en ningún equipo.</div>'}
+    </section>`;
+  $('#main').querySelectorAll('tr.clic').forEach(t => t.onclick = () => abrirFicha(t.dataset.id));
+}
+
+/* ---------------- Datos ---------------- */
+function pintarDatos(){
+  $('#main').innerHTML = `
+    <section class="bloque" style="padding-top:24px;max-width:760px">
+      <h1 class="titulo-vista">Datos y configuración</h1>
+      <p class="hint">Mientras el aplicativo no esté conectado a la hoja de cálculo, todo vive en este dispositivo. Exporte de vez en cuando para tener respaldo.</p>
+      <h2>Dirección del aplicativo</h2>
+      <p class="hint">Cuando publique el archivo, por ejemplo en GitHub Pages, pegue aquí la dirección. Los códigos QR de cada equipo apuntarán allí y abrirán la ficha correspondiente.</p>
+      <div class="fila" style="align-items:flex-end">
+        <label class="f" style="flex:3">Dirección
+          <input id="urlbase" placeholder="https://usuario.github.io/flota/ficha-tecnica-flota.html" value="${esc(data.config.urlBase||'')}"></label>
+        <button class="btn" id="btn-url" style="flex:0 0 auto;margin-bottom:12px">Guardar</button>
+      </div>
+      <h2>Respaldo</h2>
+      <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
+        <button class="btn" id="btn-export">Descargar respaldo</button>
+        <button class="btn sec" id="btn-import">Cargar respaldo</button>
+        <button class="btn danger" id="btn-reset">Volver a la flota inicial</button>
+      </div>
+      <p class="hint">Hojas de configuración: ${data.planes.length} · Equipos: ${data.equipos.length} · Cambios: ${data.historial.length} · Fotos: ${Object.keys(fotos).length} (${(JSON.stringify(fotos).length/1048576).toFixed(2)} MB de 5 MB)</p>
+    </section>`;
+  $('#btn-url').onclick = async () => { data.config.urlBase = $('#urlbase').value.trim(); await persistir(); pintarMain(); avisar('Dirección guardada'); };
+  $('#btn-export').onclick = () => {
+    descargar(new Blob([JSON.stringify(Object.assign({}, data, {fotos}), null, 2)], {type:'application/json'}), 'fichas-flota-'+hoy()+'.json');
+    toast('Respaldo descargado');
+  };
+  $('#btn-import').onclick = () => {
+    const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json';
+    inp.onchange = async () => {
+      const f = inp.files[0]; if(!f) return;
+      try{
+        const d = JSON.parse(await f.text());
+        if(!d.equipos) throw new Error('formato');
+        data = {planes:d.planes||[], equipos:d.equipos, historial:d.historial||[], config:d.config||{urlBase:'',horizonte:30}};
+        fotos = d.fotos || {};
+        if(!data.planes.length) migrarAPlanes();
+        normalizar(); sel = data.equipos[0] ? data.equipos[0].id : null;
+        await persistir(); await DB.guardarFotos(fotos);
+        pintarLista(); pintarMain(); avisar('Respaldo cargado');
+      }catch(e){ toast('El archivo no tiene el formato esperado.'); }
+    };
+    inp.click();
+  };
+  $('#btn-reset').onclick = () => confirmar('Volver a la flota inicial',
+    'Se borran las hojas de configuración, referencias, fotos e historial que haya cargado. Esta acción no se puede deshacer.',
+    async () => {
+      data = semilla(); fotos = {}; sel = data.equipos[0].id; planSel = null;
+      await persistir(); await DB.guardarFotos(fotos);
+      pintarLista(); pintarMain(); avisar('Flota restablecida');
+    });
+}
+
+/* ---------------- Modales generales ---------------- */
+function abrir(html, onMount){
+  $('#modal').innerHTML = html;
+  $('#overlay').hidden = false;
+  $('#modal').querySelectorAll('[data-cerrar]').forEach(b => b.onclick = cerrar);
+  if(onMount) onMount();
+  const f = $('#modal').querySelector('input,select,textarea,button');
+  if(f) f.focus();
+}
+function cerrar(){ $('#overlay').hidden = true; $('#modal').innerHTML = ''; }
+$('#overlay').addEventListener('click', e => { if(e.target.id === 'overlay') cerrar(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('#overlay').hidden) cerrar(); });
+
+function confirmar(titulo, texto, accion){
+  abrir(`<h3>${esc(titulo)}</h3><div class="body"><p style="margin:0;color:var(--ink-soft)">${esc(texto)}</p></div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn danger" id="ok">Confirmar</button></div>`,
+    () => { $('#ok').onclick = async () => { cerrar(); await accion(); }; });
+}
+/* Registra una lectura en la bitácora solo si es coherente con las que ya hay:
+   un horómetro no retrocede. Al registrar un cambio viejo con lectura menor a la
+   actual, la lectura queda en el cambio pero no ensucia el cálculo del uso diario. */
+function registrarLectura(eq, lectura, fecha){
+  eq.bitacora = eq.bitacora || [];
+  const otras = eq.bitacora.filter(r => r.fecha !== fecha);
+  const antes = otras.filter(r => r.fecha < fecha).sort((a,b)=>a.fecha.localeCompare(b.fecha)).pop();
+  const despues = otras.filter(r => r.fecha > fecha).sort((a,b)=>a.fecha.localeCompare(b.fecha))[0];
+  const coherente = (!antes || lectura >= antes.lectura) && (!despues || lectura <= despues.lectura);
+  if(coherente){
+    eq.bitacora = otras.concat([{fecha, lectura}]).sort((a,b) => a.fecha.localeCompare(b.fecha));
+    if(eq.bitacora.length > 60) eq.bitacora = eq.bitacora.slice(-60);
+  }
+  if(lectura >= (eq.lectura||0)){ eq.lectura = lectura; eq.lecturaFecha = fecha; }
+  return coherente;
+}
+function modalEstado(eq){
+  abrir(`<h3>Estado de ${esc(eq.codigo)}</h3>
+    <div class="body">
+      ${Object.keys(ESTADOS).map(k => `<label class="check ${eq.operativo===k?'on':''}">
+        <input type="radio" name="op" value="${k}" ${eq.operativo===k?'checked':''}>
+        <span><span class="c-nom">${ESTADOS[k].txt}</span><br>
+        <span class="c-sub">${{operativo:'Trabajando. Acumula horas o kilómetros y se le proyectan los cambios.',
+          taller:'Parado en el taller. No se proyectan fechas ni se pide repuesto.',
+          varado:'Parado en campo esperando reparación.',
+          baja:'Fuera de servicio de forma definitiva.'}[k]}</span></span></label>`).join('')}
+      <p class="hint" style="margin:6px 0 0;color:var(--steel);font-size:13px">El detalle del varado (motivo, novedad, entrada a taller) se lleva en el sistema de preoperativo, no aquí.</p>
+    </div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
+    () => {
+      $('#modal').querySelectorAll('.check').forEach(l => l.onclick = () => {
+        $('#modal').querySelectorAll('.check').forEach(x => x.classList.remove('on'));
+        l.classList.add('on');
+      });
+      $('#ok').onclick = async () => {
+        const r = $('#modal').querySelector('input[name=op]:checked');
+        if(r) eq.operativo = r.value;
+        await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Estado actualizado');
+      };
+    });
+}
+
+function modalLectura(eq){
+  abrir(`<h3>Actualizar ${eq.medidor==='km'?'kilometraje':'horómetro'} — ${esc(eq.codigo)}</h3>
+    <div class="body">
+      <div class="fila">
+        <label class="f">Lectura actual (${u(eq)})<input type="number" id="l" value="${eq.lectura||''}" inputmode="numeric"></label>
+        <label class="f">Fecha<input type="date" id="f" value="${hoy()}"></label>
+      </div>
+      <p class="hint" style="margin:0;color:var(--steel);font-size:13px">Cada lectura que registre mejora el cálculo del uso diario y de las fechas estimadas de cambio.</p>
+    </div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
+    () => { $('#ok').onclick = async () => {
+      registrarLectura(eq, Number($('#l').value)||0, $('#f').value||hoy());
+      await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Lectura registrada');
+    };});
+}
+function modalEquipo(eq){
+  const nuevo = !eq;
+  eq = eq || {id:nid(), codigo:'', tipo:'maquina', marca:'', modelo:'', placa:'', serie:'',
+              medidor:'horas', lectura:0, lecturaFecha:'', usoDia:USO_DEF.maquina, bitacora:[],
+              responsable:'', notas:'', operativo:'operativo', planId:'', estado:{}, propios:[]};
+  const opciones = t => data.planes.filter(p => (t==='camion') === (p.medidor==='km'))
+    .map(p => `<option value="${p.id}" ${eq.planId===p.id?'selected':''}>${esc(p.nombre)}</option>`).join('');
+  abrir(`<h3>${nuevo?'Agregar equipo':'Editar equipo'}</h3>
+    <div class="body">
+      <div class="fila">
+        <label class="f">Código<input id="cod" class="mono" value="${esc(eq.codigo)}" placeholder="#12 o placa"></label>
+        <label class="f">Tipo<select id="tipo">
+          <option value="maquina" ${eq.tipo==='maquina'?'selected':''}>Máquina de campo</option>
+          <option value="camion" ${eq.tipo==='camion'?'selected':''}>Camión</option></select></label>
+      </div>
+      <div class="fila">
+        <label class="f">Hoja de configuración<select id="plan">${opciones(eq.tipo)}</select></label>
+        <label class="f">Estado<select id="op">${Object.keys(ESTADOS).map(k=>`<option value="${k}" ${eq.operativo===k?'selected':''}>${ESTADOS[k].txt}</option>`).join('')}</select></label>
+      </div>
+      <div class="fila">
+        <label class="f">Marca<input id="marca" value="${esc(eq.marca)}"></label>
+        <label class="f">Modelo<input id="modelo" value="${esc(eq.modelo)}"></label>
+      </div>
+      <div class="fila">
+        <label class="f">Placa<input id="placa" class="mono" value="${esc(eq.placa)}"></label>
+        <label class="f">Serie / chasis<input id="serie" class="mono" value="${esc(eq.serie)}"></label>
+      </div>
+      <div class="fila">
+        <label class="f">Se mide por<select id="med">
+          <option value="horas" ${eq.medidor==='horas'?'selected':''}>Horómetro</option>
+          <option value="km" ${eq.medidor==='km'?'selected':''}>Kilometraje</option></select></label>
+        <label class="f">Uso por día<input type="number" step="0.5" id="uso" value="${eq.usoDia??''}"></label>
+        <label class="f">Operador o conductor<input id="resp" value="${esc(eq.responsable)}"></label>
+      </div>
+      <p class="hint" style="margin:-4px 0 12px;color:var(--steel);font-size:13px">El uso por día solo se aplica mientras no haya suficientes lecturas registradas. Después el sistema lo calcula solo.</p>
+      <label class="f">Notas<input id="notas" value="${esc(eq.notas)}" placeholder="Transporte de fruta"></label>
+    </div>
+    <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar equipo</button>'}
+      <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
+    () => {
+      $('#tipo').onchange = () => {
+        const t = $('#tipo').value;
+        $('#med').value = t === 'camion' ? 'km' : 'horas';
+        $('#uso').value = USO_DEF[t];
+        $('#plan').innerHTML = data.planes.filter(p => (t==='camion') === (p.medidor==='km'))
+          .map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('');
+      };
+      $('#ok').onclick = async () => {
+        const cod = $('#cod').value.trim();
+        if(!cod) return toast('El equipo necesita un código.');
+        if(!$('#plan').value) return toast('Cree primero una hoja de configuración para ese tipo de equipo.');
+        Object.assign(eq, {
+          codigo:cod, tipo:$('#tipo').value, planId:$('#plan').value, operativo:$('#op').value,
+          marca:$('#marca').value.trim(), modelo:$('#modelo').value.trim(),
+          placa:$('#placa').value.trim().toUpperCase(), serie:$('#serie').value.trim(), medidor:$('#med').value,
+          usoDia:$('#uso').value===''?USO_DEF[$('#tipo').value]:Number($('#uso').value),
+          responsable:$('#resp').value.trim(), notas:$('#notas').value.trim()
+        });
+        if(nuevo){ data.equipos.push(eq); sel = eq.id; vista = 'fichas'; document.body.dataset.mobile = 'ficha'; }
+        await persistir(); cerrar(); pintarNav(); pintarLista(); pintarMain(); avisar('Equipo guardado');
+      };
+      const d = $('#del');
+      if(d) d.onclick = () => confirmar('Eliminar equipo', 'Se borra el equipo '+eq.codigo+', su foto y su historial. La hoja de configuración queda intacta.', async () => {
+        data.equipos = data.equipos.filter(x => x.id !== eq.id);
+        data.historial = data.historial.filter(h => h.equipoId !== eq.id);
+        delete fotos[eq.id]; sel = data.equipos[0] ? data.equipos[0].id : null;
+        await persistir(); await DB.guardarFotos(fotos);
+        pintarLista(); pintarMain(); avisar('Equipo eliminado');
+      });
+    });
+}
+function modalCambio(eq){
+  const items = itemsDe(eq);
+  abrir(`<h3>Registrar cambio — ${esc(eq.codigo)}</h3>
+    <div class="body">
+      <div class="fila">
+        <label class="f">Fecha<input type="date" id="f" value="${hoy()}"></label>
+        <label class="f">${eq.medidor==='km'?'Kilometraje':'Horómetro'} del cambio (${u(eq)})<input type="number" id="l" value="${eq.lectura||''}" inputmode="numeric"></label>
+      </div>
+      <label class="f">Qué se cambió</label>
+      <div id="items">${items.map(it => {
+        const p = proyeccion(eq,it);
+        return `<label class="check"><input type="checkbox" value="${it.id}">
+          <span><span class="c-nom">${esc(it.componente)}</span><br>
+          <span class="c-sub">${it.referencia?esc(it.referencia):'sin referencia'}${it.cantidad?' · '+esc(it.cantidad)+' '+esc(it.unidad):''} · ${p.txt}</span></span></label>`;
+      }).join('')}</div>
+      <div class="fila" style="margin-top:14px">
+        <label class="f">Responsable<input id="r" value="Tulio"></label>
+        <label class="f">Costo total<input type="number" id="c" placeholder="0"></label>
+      </div>
+      <label class="f">Observaciones<textarea id="o" rows="2" placeholder="Se encontró fuga en el retén"></textarea></label>
+    </div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar cambio</button></div>`,
+    () => {
+      $('#items').querySelectorAll('.check').forEach(l => {
+        const cb = l.querySelector('input');
+        cb.onchange = () => l.classList.toggle('on', cb.checked);
+      });
+      $('#ok').onclick = async () => {
+        const ids = [...$('#items').querySelectorAll('input:checked')].map(i => i.value);
+        if(!ids.length) return toast('Marque al menos un filtro o aceite.');
+        const lectura = Number($('#l').value)||0, fecha = $('#f').value||hoy();
+        const regs = ids.map(id => {
+          const it = items.find(x => x.id === id);
+          fijarUltimo(eq, id, lectura, fecha);
+          return {itemId:id, componente:it.componente, referencia:it.referencia, cantidad:it.cantidad, unidad:it.unidad};
+        });
+        const coherente = registrarLectura(eq, lectura, fecha);
+        data.historial.push({id:nid(), equipoId:eq.id, fecha, lectura, items:regs,
+          responsable:$('#r').value.trim(), costo:$('#c').value===''?null:Number($('#c').value), obs:$('#o').value.trim(),
+          registrado:new Date().toISOString()});
+        await persistir(); cerrar(); pintarLista(); pintarMain();
+        avisar(coherente ? 'Cambio registrado' : 'Cambio registrado. La lectura no cuadra con la bitácora y no se usó para el cálculo del uso diario.');
+      };
+    });
+}
+
+/* ---------------- Arranque y migración ---------------- */
+function pintarMain(){
+  const f = {tablero:pintarTablero, fichas:pintarFicha, planes:pintarPlanes, requisicion:pintarRequisicion,
+             referencias:pintarReferencias, costos:pintarCostos, hist:pintarHistorial, datos:pintarDatos}[vista];
+  (f || pintarTablero)();
+}
+function normalizar(){
+  data.config = data.config || {urlBase:'', horizonte:30};
+  data.historial = data.historial || [];
+  data.planes = data.planes || [];
+  data.equipos.forEach(e => {
+    e.bitacora = e.bitacora || [];
+    e.estado = e.estado || {};
+    e.propios = e.propios || [];
+    if(e.usoDia == null) e.usoDia = USO_DEF[e.tipo] || 6;
+    if(!ESTADOS[e.operativo]) e.operativo = 'operativo';
+    if(e.lectura && e.lecturaFecha && !e.bitacora.length) e.bitacora.push({fecha:e.lecturaFecha, lectura:e.lectura});
+  });
+}
+/* Convierte datos de la versión anterior (items por equipo) a hojas por modelo */
+function migrarAPlanes(){
+  data.planes = [];
+  const porModelo = new Map();
+  data.equipos.forEach(eq => {
+    const k = ((eq.marca||'')+' '+(eq.modelo||'')).trim() || eq.codigo;
+    if(!porModelo.has(k)) porModelo.set(k, []);
+    porModelo.get(k).push(eq);
+  });
+  porModelo.forEach((eqs, nombre) => {
+    const base = eqs.find(e => e.items && e.items.length) || eqs[0];
+    /* Al plan solo pasa lo que tienen TODOS los equipos del modelo. Lo que tenía
+       uno solo queda como elemento propio suyo, para no agregárselo a los demás. */
+    const comunes = (base.items||[]).filter(it =>
+      eqs.every(e => (e.items||[]).some(x => x.componente === it.componente)));
+    const plan = {id:nid(), nombre, tipo:base.tipo, medidor:base.medidor||'horas',
+      items:comunes.map(it => ({id:nid(), categoria:it.categoria, componente:it.componente,
+        referencia:it.referencia, cantidad:it.cantidad, unidad:it.unidad, intervalo:it.intervalo}))};
+    data.planes.push(plan);
+    eqs.forEach(eq => {
+      eq.planId = plan.id; eq.estado = eq.estado || {}; eq.propios = eq.propios || [];
+      plan.items.forEach(pi => {
+        const orig = (eq.items||[]).find(x => x.componente === pi.componente);
+        if(orig && orig.ultLectura != null) eq.estado[pi.id] = {ultLectura:orig.ultLectura, ultFecha:orig.ultFecha||''};
+      });
+      (eq.items||[]).forEach(it => {
+        if(plan.items.some(pi => pi.componente === it.componente)) return;
+        const copia = {id:nid(), categoria:it.categoria, componente:it.componente, referencia:it.referencia,
+                       cantidad:it.cantidad, unidad:it.unidad, intervalo:it.intervalo};
+        eq.propios.push(copia);
+        if(it.ultLectura != null) eq.estado[copia.id] = {ultLectura:it.ultLectura, ultFecha:it.ultFecha||''};
+      });
+      delete eq.items;
+    });
+  });
+}
+$('#buscar').oninput = e => { filtro = e.target.value; pintarLista(); };
+$('#btn-nuevo-equipo').onclick = () => modalEquipo(null);
+
+(async function init(){
+  const res = await Promise.all([DB.cargar(), DB.cargarFotos()]);
+  let guardado = res[0];
+  fotos = res[1] || {};
+  if(guardado && guardado.equipos){
+    data = guardado;
+    if(!data.planes || !data.planes.length){ migrarAPlanes(); await DB.guardar(data); }
+  } else {
+    const viejo = await DB.cargarViejo();
+    if(viejo && viejo.equipos){
+      data = {planes:[], equipos:viejo.equipos, historial:viejo.historial||[], config:viejo.config||{urlBase:'',horizonte:30}};
+      migrarAPlanes();
+      toast('Se convirtieron sus fichas al nuevo formato por hojas de configuración');
+    } else {
+      data = semilla();
+    }
+    await DB.guardar(data);
+  }
+  normalizar();
+  sel = data.equipos[0] ? data.equipos[0].id : null;
+
+  const h = decodeURIComponent((location.hash||'').replace(/^#/,'')).trim();
+  if(h){
+    const eq = data.equipos.find(e => e.codigo.toLowerCase() === h.toLowerCase());
+    if(eq){ sel = eq.id; vista = 'fichas'; }
+  }
+  if(window.innerWidth > 860 || vista !== 'fichas') document.body.dataset.mobile = 'ficha';
+  pintarNav(); pintarLista(); pintarMain();
+  comprobarAlmacenamiento();
+})();
+
+/* Comprueba guardando de verdad, no adivinando. Reintenta una vez por si el
+   almacenamiento todavía no estaba listo al abrir la página. */
+async function comprobarAlmacenamiento(){
+  if(await DB.guardar(data)) return;
+  setTimeout(async () => {
+    const ok = await DB.guardar(data);
+    if(!ok){ sinAlmacenamiento = true; pintarAvisoAlmacenamiento(); }
+  }, 1500);
+}
+</script>
+</body>
+</html>
