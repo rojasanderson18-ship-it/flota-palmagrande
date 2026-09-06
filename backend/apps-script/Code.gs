@@ -38,7 +38,9 @@ function hoja_(){
 }
 
 function filaDe_(sh, key){
-  const valores = sh.getRange(2,1,Math.max(sh.getLastRow()-1,0),1).getValues();
+  const n = sh.getLastRow() - 1;
+  if(n < 1) return null;
+  const valores = sh.getRange(2,1,n,1).getValues();
   for(let i=0;i<valores.length;i++) if(valores[i][0] === key) return i+2;
   return null;
 }
