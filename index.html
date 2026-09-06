@@ -228,28 +228,12 @@ const KEY_FOTOS = 'fichas-flota-fotos-v1';
 const KEY_BACKEND = 'fichas-flota-backend-v1';
 
 /* ---------------- Backend compartido (Google Sheets + Apps Script) ----------------
-   Solo se sincronizan planes/equipos/historial/config: las fotos son pesadas y
-   se quedan solo en el dispositivo donde se tomaron. Ver README para desplegar
-   el backend.
-   BACKEND_DEFAULT deja cualquier dispositivo conectado automáticamente, sin
-   pegar nada a mano. OJO: esto viaja en el código público de la página —
-   quien vea el código fuente puede leer esta clave y usar el backend. Se
-   acepta ese riesgo porque los datos son de mantenimiento de flota, no
-   sensibles. Si se cambia la clave (Datos > Backend compartido > Cambiar
-   clave), hay que actualizar también el valor de aquí abajo y volver a
-   publicar, si no los dispositivos que no tengan un ajuste propio se quedan
-   con la clave vieja. */
-const BACKEND_DEFAULT = {
-  url: 'https://script.google.com/macros/s/AKfycbxiM0fxmj1lYpa1XQe2gpDwabSmD88D3OdC5X6jkIiEpyz1sILXgG3CU_IwJGvomzBqyQ/exec',
-  token: '2105'
-};
+   La dirección y la clave del backend son ajuste de este dispositivo (no viajan
+   dentro de "data", porque hacen falta antes de poder cargar "data"). Solo se
+   sincronizan planes/equipos/historial/config: las fotos son pesadas y se quedan
+   solo en el dispositivo donde se tomaron. Ver README para desplegar el backend. */
 let sinSincronizar = false;
-const backendConf = () => {
-  try{ const propio = JSON.parse(localStorage.getItem(KEY_BACKEND) || 'null'); if(propio && propio.url && propio.token) return propio; }
-  catch(e){}
-  return BACKEND_DEFAULT.url ? BACKEND_DEFAULT : null;
-};
-const backendEsPropio = () => { try{ const p = JSON.parse(localStorage.getItem(KEY_BACKEND) || 'null'); return !!(p && p.url && p.token); }catch(e){ return false; } };
+const backendConf = () => { try{ return JSON.parse(localStorage.getItem(KEY_BACKEND) || 'null'); }catch(e){ return null; } };
 const guardarBackendConf = c => { try{ localStorage.setItem(KEY_BACKEND, JSON.stringify(c)); }catch(e){} };
 async function remoto(op, key, valor){
   const c = backendConf();
@@ -795,7 +779,7 @@ function modalPlanNuevo(tipo){
 function modalCambiarClave(){
   abrir(`<h3>Cambiar clave del backend</h3>
     <div class="body">
-      <p class="hint" style="margin:0 0 12px">Se actualiza en el backend y en este dispositivo. Los demás dispositivos siguen usando la clave que trae la aplicación por defecto (BACKEND_DEFAULT en index.html) hasta que se actualice ese valor en el código y se vuelva a publicar — solo entonces todos quedan conectados sin tocarlos uno por uno.</p>
+      <p class="hint" style="margin:0 0 12px">Se actualiza en el backend y en este dispositivo. Después hay que repetir "Guardar y probar conexión" con la nueva clave en los demás dispositivos conectados.</p>
       <label class="f">Clave nueva (mínimo 4 caracteres)<input id="nc1" type="text" class="mono"></label>
       <label class="f">Repetir clave nueva<input id="nc2" type="text" class="mono"></label>
     </div>
@@ -808,7 +792,7 @@ function modalCambiarClave(){
       try{
         await remotoCambiarClave(a);
         cerrar(); pintarMain();
-        toast('Clave cambiada en este dispositivo y en el backend. Actualice BACKEND_DEFAULT en el código y publique de nuevo para que los demás dispositivos sigan conectados.');
+        toast('Clave cambiada. Actualícela también en los demás dispositivos.');
       }catch(e){ toast('No se pudo cambiar la clave: revise la conexión e intente de nuevo.'); }
     };});
 }
@@ -1387,32 +1371,22 @@ function pintarHistorial(){
 /* ---------------- Datos ---------------- */
 function pintarDatos(){
   const bc = backendConf();
-  const propio = backendEsPropio();
-  const estadoTxt = !bc
-    ? 'Este dispositivo tiene el backend compartido desconectado a propósito: todo vive solo aquí.'
-    : propio
-      ? 'Este dispositivo usa un backend distinto al de la aplicación (configurado a mano aquí).'
-      : 'Conectado automáticamente al backend compartido de la aplicación — no hace falta configurar nada en los demás dispositivos.';
   $('#main').innerHTML = `
     <section class="bloque" style="padding-top:24px;max-width:760px">
       <h1 class="titulo-vista">Datos y configuración</h1>
-      <p class="hint">${bc ? 'Los datos se guardan en este dispositivo y se sincronizan con el backend compartido.' : 'Todo vive solo en este dispositivo.'} Exporte de vez en cuando para tener respaldo.</p>
+      <p class="hint">${bc ? 'Los datos se guardan en este dispositivo y se sincronizan con el backend compartido.' : 'Mientras el aplicativo no esté conectado a un backend compartido, todo vive solo en este dispositivo.'} Exporte de vez en cuando para tener respaldo.</p>
       <h2>Backend compartido</h2>
-      <p class="hint">${estadoTxt}</p>
+      <p class="hint">Para que la flota se vea igual desde cualquier computador o celular, conecte una hoja de Google con Apps Script publicado como aplicación web (vea el README, carpeta <span class="mono">backend/apps-script</span>). Este ajuste es de este dispositivo/navegador, no viaja en el respaldo.</p>
       ${sinSincronizar && bc ? '<div class="aviso">No se pudo sincronizar con el backend en el último intento. Los cambios quedaron guardados en este dispositivo y se reintentará al guardar de nuevo.</div>' : ''}
       <div class="fila">
         <label class="f" style="flex:3">URL de la aplicación web (Apps Script)
           <input id="be-url" class="mono" placeholder="https://script.google.com/macros/s/AKfycb.../exec" value="${esc(bc?.url||'')}"></label>
         <label class="f" style="flex:2">Clave
-          <input id="be-token" class="mono" placeholder="clave" value="${esc(bc?.token||'')}"></label>
+          <input id="be-token" class="mono" placeholder="clave del SECRET" value="${esc(bc?.token||'')}"></label>
       </div>
-      <p class="hint" style="margin-top:-6px">Solo hace falta tocar esto si este dispositivo debe usar un backend distinto al que trae la aplicación (por ejemplo, para pruebas).</p>
       <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
-        <button class="btn sec" id="be-guardar">Guardar backend propio de este dispositivo</button>
-        ${bc ? '<button class="btn sec" id="be-sync">Sincronizar ahora</button>' : ''}
-        ${bc ? '<button class="btn sec" id="be-clave">Cambiar clave</button>' : ''}
-        ${propio ? '<button class="btn sec" id="be-restablecer">Usar el backend de la aplicación</button>' : ''}
-        ${bc ? '<button class="btn danger" id="be-quitar">Desconectar (solo local)</button>' : '<button class="btn sec" id="be-reconectar">Reconectar al backend de la aplicación</button>'}
+        <button class="btn" id="be-guardar">Guardar y probar conexión</button>
+        ${bc ? '<button class="btn sec" id="be-sync">Sincronizar ahora</button><button class="btn sec" id="be-clave">Cambiar clave</button><button class="btn danger" id="be-quitar">Desconectar</button>' : ''}
       </div>
       <h2 style="margin-top:22px">Dirección del aplicativo</h2>
       <p class="hint">Cuando publique el archivo, por ejemplo en GitHub Pages, pegue aquí la dirección. Los códigos QR de cada equipo apuntarán allí y abrirán la ficha correspondiente.</p>
@@ -1457,17 +1431,9 @@ function pintarDatos(){
   };
   const beQuitar = $('#be-quitar');
   if(beQuitar) beQuitar.onclick = () => confirmar('Desconectar backend',
-    'Este dispositivo dejará de sincronizar y va a dejar de recibir cambios de los demás. Los datos siguen guardados localmente.', () => {
-      guardarBackendConf({disabled:true}); sinSincronizar = false; pintarMain(); toast('Backend desconectado en este dispositivo');
+    'Este dispositivo dejará de sincronizar. Los datos siguen guardados localmente.', () => {
+      localStorage.removeItem(KEY_BACKEND); sinSincronizar = false; pintarMain(); toast('Backend desconectado');
     });
-  const beReconectar = $('#be-reconectar');
-  if(beReconectar) beReconectar.onclick = () => {
-    localStorage.removeItem(KEY_BACKEND); sinSincronizar = false; pintarMain(); toast('Reconectado al backend de la aplicación');
-  };
-  const beRestablecer = $('#be-restablecer');
-  if(beRestablecer) beRestablecer.onclick = () => {
-    localStorage.removeItem(KEY_BACKEND); sinSincronizar = false; pintarMain(); toast('Usando el backend de la aplicación');
-  };
   const beClave = $('#be-clave');
   if(beClave) beClave.onclick = () => modalCambiarClave();
   $('#btn-url').onclick = async () => { data.config.urlBase = $('#urlbase').value.trim(); await persistir(); pintarMain(); avisar('Dirección guardada'); };
