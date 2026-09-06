@@ -1,0 +1,14 @@
+{
+  "name": "Fichas técnicas — Flota Palma Grande",
+  "short_name": "Flota Palma Grande",
+  "description": "Fichas técnicas y mantenimiento de la flota de Palma Grande S.A.S.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EDF0EE",
+  "theme_color": "#16211C",
+  "lang": "es",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
