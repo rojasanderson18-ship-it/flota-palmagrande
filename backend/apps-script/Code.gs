@@ -144,6 +144,10 @@ function doPost(e){
       const archivo = carpeta.createFile(blob).setName(p.key);
       archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       return json_({ok:true, url: urlFoto_(archivo)});
+    } catch(err){
+      /* Se manda el mensaje real al aplicativo para no tener que ir a
+         revisar "Ejecuciones" en el editor de Apps Script cada vez. */
+      return json_({ok:false, error: 'Drive: ' + (err && err.message || err)});
     } finally {
       lock.releaseLock();
     }
