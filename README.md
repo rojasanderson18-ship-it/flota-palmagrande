@@ -47,9 +47,12 @@ compartido (ver abajo): cualquier dispositivo que abra la página ya
 sincroniza contra la misma hoja de Google, sin configurar nada.
 
 - Los datos operativos (planes, equipos, historial, configuración) se
-  comparten entre todos los dispositivos que abran el aplicativo. **Las
-  fotos no se sincronizan** — son pesadas y se quedan solo en el dispositivo
-  donde se tomaron.
+  comparten entre todos los dispositivos que abran el aplicativo, **incluidas
+  las fotos**: al tomar o subir una foto, además de guardarse en el
+  dispositivo (para verla sin internet), se sube al backend como archivo en
+  una carpeta de Google Drive, y el enlace queda guardado en el propio
+  equipo — así cualquier otro dispositivo la ve también. Si el dispositivo
+  no tiene el backend conectado, la foto se queda solo ahí.
 - Es "el último guardado gana": si dos personas editan al mismo tiempo desde
   distintos dispositivos, se queda el cambio que se guardó más reciente. Para
   el tamaño de esta flota no debería ser un problema, pero conviene saberlo.
@@ -131,6 +134,16 @@ Si se vuelve a editar `Code.gs` más adelante, hay que crear una nueva
 implementación (o editar la existente desde *Gestionar implementaciones*)
 para que el cambio quede publicado en la URL `/exec` — guardar el archivo en
 el editor no la actualiza por sí solo.
+
+**Fotos:** el backend crea una carpeta de Google Drive llamada "Fotos flota
+— fichas técnicas" (en el Drive de la cuenta que lo desplegó) y guarda ahí
+cada foto, compartida como "cualquiera con el enlace puede ver" para que se
+pueda mostrar directamente en la app desde cualquier dispositivo. Como usa
+`DriveApp`, la primera vez que se implemente (o se implemente de nuevo tras
+este cambio) Google va a pedir autorizar un permiso adicional sobre Drive —
+hay que aceptarlo para que subir fotos funcione. Quitar una foto desde el
+aplicativo la envía a la papelera de ese Drive, no la borra para siempre de
+inmediato.
 
 ## Próximo paso natural
 

@@ -3,8 +3,11 @@
  *
  * Guarda el estado completo del aplicativo (planes, equipos, historial,
  * config) como un texto JSON en una hoja de cálculo, para que se comparta
- * entre todos los dispositivos que abran el aplicativo. Las fotos NO pasan
- * por aquí: son pesadas y se quedan solo en el dispositivo donde se toman.
+ * entre todos los dispositivos que abran el aplicativo. Las fotos van
+ * aparte, como archivos en una carpeta de Google Drive (serían demasiado
+ * pesadas para meterlas en la misma celda de la hoja): el aplicativo sube
+ * cada una con op=set_foto y guarda el enlace de Drive en el propio equipo,
+ * dentro del bloque de datos normal.
  *
  * ---- Despliegue ----
  * 1. Crear una hoja de cálculo de Google nueva (puede estar vacía).
@@ -31,6 +34,20 @@
 
 const SECRET_INICIAL = 'CAMBIAR-ESTA-CLAVE';
 const HOJA = 'kv';
+const CARPETA_FOTOS = 'Fotos flota — fichas técnicas';
+
+function carpetaFotos_(){
+  const it = DriveApp.getFoldersByName(CARPETA_FOTOS);
+  if(it.hasNext()) return it.next();
+  return DriveApp.createFolder(CARPETA_FOTOS);
+}
+function archivoFotoDe_(carpeta, key){
+  const it = carpeta.getFilesByName(key);
+  return it.hasNext() ? it.next() : null;
+}
+function urlFoto_(archivo){
+  return 'https://drive.google.com/uc?export=view&id=' + archivo.getId();
+}
 
 /* La clave vigente es la guardada en Propiedades del script si ya se cambió
    alguna vez desde el aplicativo; si no, la de SECRET_INICIAL de arriba. */
@@ -109,6 +126,33 @@ function doPost(e){
     } finally {
       lock.releaseLock();
     }
+    return json_({ok:true});
+  }
+  if(p.op === 'set_foto'){
+    if(!p.key) return json_({ok:false, error:'falta key'});
+    if(typeof body.value !== 'string') return json_({ok:false, error:'falta value'});
+    const m = body.value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if(!m) return json_({ok:false, error:'la foto debe venir como data URL de imagen'});
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try{
+      const bytes = Utilities.base64Decode(m[2]);
+      const blob = Utilities.newBlob(bytes, m[1], p.key);
+      const carpeta = carpetaFotos_();
+      const anterior = archivoFotoDe_(carpeta, p.key);
+      if(anterior) anterior.setTrashed(true);
+      const archivo = carpeta.createFile(blob).setName(p.key);
+      archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      return json_({ok:true, url: urlFoto_(archivo)});
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  if(p.op === 'del_foto'){
+    if(!p.key) return json_({ok:false, error:'falta key'});
+    const carpeta = carpetaFotos_();
+    const archivo = archivoFotoDe_(carpeta, p.key);
+    if(archivo) archivo.setTrashed(true);
     return json_({ok:true});
   }
   return json_({ok:false, error:'operación desconocida'});

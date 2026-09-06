@@ -247,7 +247,7 @@ async function remoto(op, key, valor){
   if(!c || !c.url || !c.token) return null;
   const qs = new URLSearchParams({op, key:key||'', token:c.token});
   const url = c.url + (c.url.includes('?') ? '&' : '?') + qs.toString();
-  const esEscritura = op === 'set' || op === 'set_secret';
+  const esEscritura = op === 'set' || op === 'set_secret' || op === 'set_foto' || op === 'del_foto';
   const opts = esEscritura
     ? {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({value:valor})}
     : {method:'GET'};
@@ -266,6 +266,14 @@ async function remotoCambiarClave(nueva){
   const c = backendConf();
   guardarBackendConf(Object.assign({}, c, {token: nueva}));
 }
+/* Sube una foto (data URL) al backend y devuelve el enlace público de Drive
+   que hay que guardar en el equipo para que se vea desde otros dispositivos. */
+async function remotoSubirFoto(id, dataUrl){ const j = await remoto('set_foto', id, dataUrl); return j.url; }
+async function remotoBorrarFoto(id){ await remoto('del_foto', id); }
+/* La foto de un equipo: primero la copia local (inmediata, sirve sin
+   internet), si no hay la del backend (para verla en un dispositivo
+   distinto al que la tomó). */
+const fotoDe = eq => fotos[eq.id] || eq.fotoUrl || null;
 
 const DB = {
   async cargar(){
@@ -467,11 +475,20 @@ function elegirFoto(eq){
   inp.onchange = async () => {
     const f = inp.files[0]; if(!f) return;
     toast('Procesando foto…');
-    try{
-      fotos[eq.id] = await comprimirFoto(f);
-      if(!await DB.guardarFotos(fotos)){ delete fotos[eq.id]; return; }
-      pintarLista(); pintarMain(); toast('Foto guardada');
-    }catch(e){ toast('No se pudo leer esa imagen. Intente con otra.'); }
+    let dataUrl;
+    try{ dataUrl = await comprimirFoto(f); }
+    catch(e){ return toast('No se pudo leer esa imagen. Intente con otra.'); }
+    fotos[eq.id] = dataUrl;
+    if(!await DB.guardarFotos(fotos)){ delete fotos[eq.id]; return; }
+    pintarLista(); pintarMain(); toast('Foto guardada en este dispositivo');
+    if(backendConf()){
+      toast('Subiendo foto al backend…');
+      try{
+        eq.fotoUrl = await remotoSubirFoto(eq.id, dataUrl);
+        await persistir();
+        pintarLista(); pintarMain(); toast('Foto sincronizada');
+      }catch(e){ toast('La foto quedó guardada en este dispositivo, pero no se pudo subir al backend.'); }
+    }
   };
   inp.click();
 }
@@ -605,7 +622,7 @@ function pintarLista(){
   const ok = e => !q || [e.codigo,e.marca,e.modelo,e.placa,e.responsable].join(' ').toLowerCase().includes(q);
   const grupo = (t,arr) => !arr.length ? '' : `<div class="grupo">${t}</div>` + arr.map(e => `
       <button class="eq" data-id="${e.id}" aria-current="${e.id===sel}">
-        ${fotos[e.id] ? `<img class="eq-foto" src="${fotos[e.id]}" alt="">` : `<span class="eq-ph">${silueta(e)}</span>`}
+        ${fotoDe(e) ? `<img class="eq-foto" src="${esc(fotoDe(e))}" alt="">` : `<span class="eq-ph">${silueta(e)}</span>`}
         <span class="eq-cod mono">${esc(e.codigo)}</span>
         <span><span class="eq-nom">${esc(e.marca)} ${esc(e.modelo)}</span><br>
         <span class="eq-sub">${trabajando(e) ? esc(e.responsable || (e.tipo==='camion'?'Sin conductor':'Sin operador')) : estOp(e).txt}</span></span>
@@ -1077,8 +1094,8 @@ function pintarFicha(){
   $('#main').innerHTML = `
     <button class="backbtn" id="volver">‹ Equipos</button>
     <div class="fichahead">
-      <button class="fichafoto" id="foto-grande" title="${fotos[eq.id]?'Cambiar la foto':'Agregar una foto'}">
-        ${fotos[eq.id] ? `<img src="${fotos[eq.id]}" alt="Foto de ${esc(eq.codigo)}">` : silueta(eq)}
+      <button class="fichafoto" id="foto-grande" title="${fotoDe(eq)?'Cambiar la foto':'Agregar una foto'}">
+        ${fotoDe(eq) ? `<img src="${esc(fotoDe(eq))}" alt="Foto de ${esc(eq.codigo)}">` : silueta(eq)}
       </button>
       <div>
         <div class="cod mono">${esc(eq.codigo)}</div>
@@ -1101,8 +1118,8 @@ function pintarFicha(){
       <button class="btn sec" id="btn-plan">Ver configuración del modelo</button>
       <button class="btn sec" id="btn-estado">Cambiar estado</button>
       <button class="btn sec" id="btn-editeq">Editar datos</button>
-      <button class="btn sec" id="btn-foto">${fotos[eq.id]?'Cambiar foto':'Agregar foto'}</button>
-      ${fotos[eq.id] ? '<button class="btn sec" id="btn-foto-del">Quitar foto</button>' : ''}
+      <button class="btn sec" id="btn-foto">${fotoDe(eq)?'Cambiar foto':'Agregar foto'}</button>
+      ${fotoDe(eq) ? '<button class="btn sec" id="btn-foto-del">Quitar foto</button>' : ''}
       <button class="btn sec" id="btn-imprimir">Imprimir ficha</button>
       ${sinRef ? `<span class="badge prox">${sinRef} sin referencia</span>` : ''}
     </div>
@@ -1154,7 +1171,14 @@ function pintarFicha(){
   $('#btn-imprimir').onclick = () => imprimirFicha(eq);
   const bd = $('#btn-foto-del');
   if(bd) bd.onclick = () => confirmar('Quitar foto', 'Se borra la foto de '+eq.codigo+'. La ficha y el historial quedan intactos.', async () => {
-    delete fotos[eq.id]; await DB.guardarFotos(fotos); pintarLista(); pintarMain(); toast('Foto eliminada');
+    delete fotos[eq.id];
+    await DB.guardarFotos(fotos);
+    if(eq.fotoUrl){
+      eq.fotoUrl = null;
+      await persistir();
+      if(backendConf()) remotoBorrarFoto(eq.id).catch(() => {});
+    }
+    pintarLista(); pintarMain(); toast('Foto eliminada');
   });
   $('#main').querySelectorAll('[data-edit-item]').forEach(b => b.onclick = () => {
     const it = itemsDe(eq).find(i => i.id === b.dataset.editItem);
@@ -1337,7 +1361,7 @@ function imprimirFicha(eq){
   const plan = planPorId(eq.planId);
   $('#print-area').innerHTML = `
     <div class="p-head">
-      ${fotos[eq.id] ? `<img class="p-foto" src="${fotos[eq.id]}" alt="">` : ''}
+      ${fotoDe(eq) ? `<img class="p-foto" src="${esc(fotoDe(eq))}" alt="">` : ''}
       <div>
         <div class="p-cod">${esc(eq.codigo)}</div>
         <div style="font-size:15px;font-weight:600">${esc(eq.marca)} ${esc(eq.modelo)}</div>
@@ -1633,6 +1657,7 @@ function modalEquipo(eq){
         data.equipos = data.equipos.filter(x => x.id !== eq.id);
         data.historial = data.historial.filter(h => h.equipoId !== eq.id);
         delete fotos[eq.id]; sel = data.equipos[0] ? data.equipos[0].id : null;
+        if(eq.fotoUrl && backendConf()) remotoBorrarFoto(eq.id).catch(() => {});
         await persistir(); await DB.guardarFotos(fotos);
         pintarLista(); pintarMain(); avisar('Equipo eliminado');
       });
