@@ -36,7 +36,7 @@
   header.top nav button[aria-current="true"]{background:#EDF0EE;color:var(--ink);border-color:#EDF0EE;font-weight:600}
 
   .shell{display:grid;grid-template-columns:280px 1fr;min-height:calc(100vh - 56px)}
-  @media(max-width:860px){
+  @media screen and (max-width:860px){
     .shell{grid-template-columns:1fr}
     body[data-mobile="ficha"] aside{display:none}
     body[data-mobile="lista"] main{display:none}
@@ -67,7 +67,7 @@
   .fichafoto{width:168px;height:118px;border-radius:2px;overflow:hidden;background:#22302A;display:flex;align-items:center;justify-content:center;flex:none;border:none;padding:0;color:#EDF0EE}
   .fichafoto img{width:100%;height:100%;object-fit:cover;display:block}
   .fichafoto svg{width:54px;height:54px;opacity:.4}
-  @media(max-width:560px){.fichafoto{width:100%;height:150px}}
+  @media screen and (max-width:560px){.fichafoto{width:100%;height:150px}}
   .fichahead .cod{font-size:30px;font-weight:700;line-height:1}
   .fichahead .nom{font-size:18px;font-weight:600}
   .fichahead .meta{font-size:13px;color:#9CB3A7}
@@ -78,7 +78,7 @@
   .lectura button{background:transparent;border:1px solid #3A4A42;color:#B9C9C1;border-radius:var(--radius);padding:3px 9px;margin-top:6px;font-size:12px}
 
   .barra{display:flex;gap:8px;flex-wrap:wrap;padding:14px 22px;border-bottom:1px solid var(--line);background:#E9ECEA;align-items:center}
-  @media(max-width:700px){
+  @media screen and (max-width:700px){
     .barra{flex-wrap:nowrap;overflow-x:auto;padding:10px 14px;-webkit-overflow-scrolling:touch}
     .barra .btn,.barra .btn.sec,.barra .btn.danger{flex:none;white-space:nowrap;padding:8px 12px;font-size:13px}
   }
@@ -91,7 +91,7 @@
   .bloque h2{font-size:15px;margin:0 0 4px;font-weight:600}
   .bloque p.hint{margin:0 0 12px;color:var(--steel);font-size:13px;max-width:74ch}
   .titulo-vista{font-size:22px;font-weight:700;margin:0 0 2px}
-  @media(max-width:700px){
+  @media screen and (max-width:700px){
     section.bloque{padding:14px 12px 0}
     .titulo-vista{font-size:19px}
   }
@@ -110,7 +110,7 @@
   tfoot td{background:#E9ECEA;font-weight:600;border-top:1px solid var(--line)}
   .ref{font-size:13px}
   .ref.vacio{color:var(--steel);font-style:italic}
-  @media(max-width:700px){
+  @media screen and (max-width:700px){
     .tabla-envoltorio{margin:0 -12px;padding:0 12px;border-radius:0}
     .tabla-envoltorio table{border-radius:var(--radius);min-width:640px}
     td,.ref{white-space:nowrap}
@@ -155,7 +155,7 @@
   .gv-bar{width:100%;max-width:46px;background:var(--green);border-radius:2px 2px 0 0;min-height:2px}
   .gv-bar.cero{background:var(--line)}
   .gv-lab{font-size:11px;color:var(--steel);margin-top:5px;white-space:nowrap}
-  @media(max-width:560px){.gb-lab{width:96px}.gb-val{width:88px;font-size:12px}}
+  @media screen and (max-width:560px){.gb-lab{width:96px}.gb-val{width:88px;font-size:12px}}
   .qr-caja{display:flex;gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;flex-wrap:wrap}
   .qr-caja img,.qr-caja canvas{width:112px;height:112px;flex:none}
   .qr-txt{font-size:13px;color:var(--ink-soft);max-width:52ch}
@@ -210,9 +210,15 @@
     /* Los encabezados (th) son textos cortos que este archivo controla:
        basta con permitirles partirse en los espacios (el wrap normal del
        navegador) para que quepan en dos líneas sin romper una palabra a
-       la mitad, como pasaba con "Cantidad" → "Cantida"/"d". El contenido
-       de datos (td) sí puede traer un código de referencia largo sin
-       ningún espacio, así que ese necesita poder partirse donde sea. */
+       la mitad, como pasaba con "Cantidad" → "Cantida"/"d". Pero en
+       columnas muy angostas (ficha impresa desde el celular) una sola
+       palabra larga como "Componente" no cabe ni partida en espacios, y
+       sin ninguna posibilidad de corte se desborda sobre el encabezado
+       vecino: overflow-wrap:break-word deja partirla SOLO si de verdad no
+       cabe, sin tocar los casos donde ya cabía completa. El contenido de
+       datos (td) sí puede traer un código de referencia largo sin ningún
+       espacio, así que ese necesita poder partirse donde sea. */
+    #print-area th{overflow-wrap:break-word}
     #print-area td{word-break:break-word;overflow-wrap:anywhere}
     .p-items th:nth-child(1),.p-items td:nth-child(1){width:17%}
     .p-items th:nth-child(2),.p-items td:nth-child(2){width:27%}
