@@ -1206,6 +1206,7 @@ function pintarProveedores(){
       <p class="hint">Registre aquí cada proveedor con sus referencias y costos. Al editar un filtro o lubricante en Configuración o en la ficha de un equipo, se elige de esta lista en vez de escribirlo de nuevo.</p>
       <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
         <button class="btn" id="cat-nuevo">+ Agregar proveedor y referencia</button>
+        <button class="btn sec" id="cat-pdf">Cargar cotización (PDF)</button>
       </div>
       <div class="tarjetas">
         <div class="tarjeta"><div class="n">${data.catalogoProveedores.length}</div><div class="t">Referencias registradas</div></div>
@@ -1227,6 +1228,7 @@ function pintarProveedores(){
       }).join('') : '<div class="vacio-msg">Todavía no hay proveedores registrados. Use "+ Agregar proveedor y referencia".</div>'}
     </section>`;
   $('#cat-nuevo').onclick = () => modalCatalogoProveedor(null);
+  $('#cat-pdf').onclick = () => modalCargarCotizacion();
   $('#main').querySelectorAll('[data-cat-editar]').forEach(b => b.onclick = () =>
     modalCatalogoProveedor(data.catalogoProveedores.find(c => c.id === b.dataset.catEditar)));
 }
@@ -1345,6 +1347,262 @@ function modalCatalogoProveedor(entry){
           data.equipos.forEach(eq => (eq.propios||[]).forEach(it => limpiarRefCatalogo(it, entry.id)));
           await persistir(); pintarMain(); avisar('Eliminado del catálogo');
         });
+    });
+}
+
+/* ---------------- Cargar cotización desde PDF ----------------
+   Lee un PDF de cotización de un proveedor (como las que llegan por
+   correo), reconstruye sus filas de tabla a partir de las posiciones de
+   texto que reporta pdf.js, e intenta reconocer código/nombre/cantidad/
+   costo con una expresión regular pensada para el formato típico
+   "Código Nombre Cant. %IVA Unidad V/Unit. Desc. Subtotal". El resultado
+   SIEMPRE se muestra en una tabla editable antes de guardar nada: el
+   reconocimiento automático es solo un punto de partida, nunca se
+   guarda sin que el usuario revise cada fila. */
+let _pdfjsCargando = null;
+function cargarPdfJs(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(_pdfjsCargando) return _pdfjsCargando;
+  _pdfjsCargando = new Promise((resolve, reject) => {
+    const V = '3.11.174';
+    const s = document.createElement('script');
+    s.src = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${V}/pdf.min.js`;
+    s.onload = () => {
+      if(!window.pdfjsLib){ _pdfjsCargando = null; reject(new Error('El lector de PDF no cargó correctamente.')); return; }
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${V}/pdf.worker.min.js`;
+      resolve(window.pdfjsLib);
+    };
+    s.onerror = () => { _pdfjsCargando = null; reject(new Error('No se pudo cargar el lector de PDF. Verifique la conexión a internet e intente de nuevo.')); };
+    document.head.appendChild(s);
+  });
+  return _pdfjsCargando;
+}
+/* Un mismo número puede venir como "40,000.00" (miles con coma) o
+   "40.000,00" (miles con punto, como se acostumbra en Colombia): se
+   asume que el ÚLTIMO separador que aparece es el decimal, sin importar
+   cuál símbolo sea. */
+function parsePrecio(str){
+  if(str == null) return null;
+  str = String(str).trim().replace(/[^\d.,]/g,'');
+  if(!str) return null;
+  const lastComma = str.lastIndexOf(','), lastDot = str.lastIndexOf('.');
+  let limpio = str;
+  if(lastComma>=0 || lastDot>=0){
+    const decimal = lastDot > lastComma ? '.' : ',';
+    const miles = decimal === '.' ? ',' : '.';
+    limpio = str.split(miles).join('').replace(decimal, '.');
+  }
+  const n = Number(limpio);
+  return isNaN(n) ? null : n;
+}
+/* Reconstruye el texto del PDF en líneas respetando la posición: pdf.js
+   entrega cada fragmento de texto con su coordenada, sin garantizar que
+   vengan en orden de lectura para un documento con columnas o tablas —
+   agrupar por altura (Y) y ordenar por X dentro de cada altura recupera
+   las filas de la tabla tal como se ven. */
+async function extraerLineasPDF(file){
+  const pdfjsLib = await cargarPdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  const lineas = [];
+  for(let p=1; p<=pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const porY = new Map();
+    content.items.forEach(it => {
+      const y = Math.round(it.transform[5]);
+      if(!porY.has(y)) porY.set(y, []);
+      porY.get(y).push({x:it.transform[4], texto:it.str});
+    });
+    [...porY.keys()].sort((a,b)=>b-a).forEach(y => {
+      const linea = porY.get(y).sort((a,b)=>a.x-b.x).map(i=>i.texto).join(' ').replace(/\s+/g,' ').trim();
+      if(linea) lineas.push(linea);
+    });
+  }
+  return lineas;
+}
+/* Formato típico de cotización con columnas Código/Nombre/Cant./%IVA/
+   Unidad/V.Unit/Desc./Subtotal en una sola línea por producto (el caso
+   más común visto en las cotizaciones de proveedores de repuestos). Si
+   una línea no calza con ese patrón exacto, se prueba uno más simple
+   (código, descripción y un último número que parezca precio) para no
+   perder filas de formatos distintos — siempre a revisar por el usuario. */
+function parseFilasCotizacion(lineas){
+  const reCompleta = /^(\S+)\s+(.+?)\s+(\d+(?:[.,]\d+)?)\s+(\d{1,2})\s+(\S+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)$/;
+  const reSimple = /^(\S+)\s+(.+?)\s+([\d.,]+)$/;
+  const filas = [];
+  lineas.forEach(linea => {
+    linea = linea.trim();
+    if(!linea) return;
+    let m = linea.match(reCompleta);
+    if(m){
+      filas.push({codigo:m[1], nombre:m[2].trim(), cantidad:parsePrecio(m[3])||1, unidad:'und', costoUnitario:parsePrecio(m[6])});
+      return;
+    }
+    m = linea.match(reSimple);
+    if(m && /\d/.test(m[1])){
+      const costo = parsePrecio(m[3]);
+      if(costo && costo >= 500) filas.push({codigo:m[1], nombre:m[2].trim(), cantidad:1, unidad:'und', costoUnitario:costo});
+    }
+  });
+  return filas;
+}
+/* Adivina el nombre del proveedor buscando la primera línea que parezca
+   un nombre de empresa (todo en mayúsculas, sin números) evitando las
+   etiquetas típicas del formato ("NIT", "COTIZACION", etc.). Es solo un
+   punto de partida — el campo queda editable en el modal. */
+function adivinarProveedor(lineas){
+  const evitar = /^(PAG|COTIZACI[OÓ]N|NIT|DIR|TEL|FECHA|CLIENTE|CIUDAD|TEL[EÉ]FONO|DIRECCI[OÓ]N|C[OÓ]DIGO|OBSERVACIONES|CONDICIONES|VALIDEZ|ENTREGA|SUBTOTAL|DESCUENTO|IVA|TOTAL|ELABOR[OÓ]|REVIS[OÓ]|APROB[OÓ]|AUDIT[OÓ]|RECIBIDO)\b/i;
+  for(const l of lineas){
+    const t = l.trim();
+    if(t.length < 4 || /\d/.test(t) || evitar.test(t)) continue;
+    if(t === t.toUpperCase() && /^[A-ZÁÉÍÓÚÑ .,&-]+$/.test(t)) return t;
+  }
+  return '';
+}
+function itemRealPorId(eq, itemId){
+  const plan = planPorId(eq.planId);
+  if(plan){ const it = plan.items.find(i => i.id === itemId); if(it) return it; }
+  return (eq.propios||[]).find(i => i.id === itemId) || null;
+}
+/* Para distinguir en el desplegable dos ítems con el MISMO nombre de
+   componente (pasa de verdad: una hoja puede tener dos filas llamadas
+   igual "Filtro hidráulico" para dos filtros físicos distintos), se
+   numera cada repetición — el nombre solo no alcanza para diferenciarlos. */
+function itemsConEtiqueta(eq){
+  const conteo = new Map();
+  return itemsDe(eq).map(it => {
+    const n = (conteo.get(it.componente)||0) + 1;
+    conteo.set(it.componente, n);
+    return {item:it, etiqueta:it.componente};
+  }).map((x, i, arr) => {
+    const total = arr.filter(y => y.item.componente === x.item.componente).length;
+    if(total <= 1) return x;
+    const pos = arr.slice(0, i+1).filter(y => y.item.componente === x.item.componente).length;
+    return {item:x.item, etiqueta:x.item.componente+' ('+pos+')'};
+  });
+}
+function modalCargarCotizacion(){
+  const equipos = data.equipos.slice().sort((a,b) => a.codigo.localeCompare(b.codigo, 'es', {numeric:true}));
+  abrir(`<h3>Cargar cotización (PDF)</h3>
+    <div class="body">
+      <p class="hint" style="margin-top:0">Suba el PDF tal como lo manda el proveedor. Se reconocen automáticamente las filas de la tabla, pero SIEMPRE puede revisar y corregir cada una antes de guardar nada.</p>
+      <div class="fila">
+        <label class="f">Equipo<select id="pdf-eq">
+          <option value="">Seleccione un equipo…</option>
+          ${equipos.map(e => `<option value="${e.id}">${esc(e.codigo)} — ${esc(e.marca)} ${esc(e.modelo)}</option>`).join('')}
+        </select></label>
+        <label class="f">Proveedor<input id="pdf-prov" placeholder="Se completa solo al leer el PDF"></label>
+      </div>
+      <label class="f">Archivo PDF<input type="file" id="pdf-file" accept="application/pdf,.pdf"></label>
+      <div id="pdf-estado" class="hint" style="margin:0"></div>
+      <div id="pdf-filas"></div>
+    </div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok" disabled>Cargar seleccionadas</button></div>`,
+    () => {
+      let filas = [];
+      /* Devuelve tanto el HTML de las opciones como el id que quedó
+         elegido por defecto (adivinado o ya elegido antes), para que
+         quien llama pueda guardarlo de una vez en filas[i].itemId — de
+         lo contrario, una fila que el usuario nunca toca (porque la
+         adivinanza ya se ve bien en pantalla) se guardaría sin destino
+         real, ya que un <option selected> no dispara el evento "change". */
+      function opcionesItem(eq, seleccionado, nombreDetectado){
+        if(!eq) return {html:'<option value="">Elija primero el equipo</option>', mejor:null};
+        const etiquetados = itemsConEtiqueta(eq);
+        if(!etiquetados.length) return {html:'<option value="">Este equipo no tiene filtros ni lubricantes</option>', mejor:null};
+        let mejor = seleccionado && etiquetados.some(x => x.item.id===seleccionado) ? seleccionado : null;
+        if(!mejor && nombreDetectado){
+          const n = nombreDetectado.toUpperCase();
+          const candidato = etiquetados.find(x => {
+            const comp = x.item.componente.toUpperCase();
+            if(/TRAMPA|SEPARADOR/.test(comp) && (/(ACPM|COMBUSTIBLE).*(TRAMPA|SEPARADOR|AGUA)/.test(n) || /SEPARADOR.*AGUA/.test(n))) return true;
+            if(/COMBUSTIBLE/.test(comp) && !/TRAMPA|SEPARADOR/.test(comp) && /ACPM|COMBUSTIBLE|DIESEL/.test(n) && !/TRAMPA|SEPARADOR/.test(n)) return true;
+            if(/ACEITE/.test(comp) && /MOTOR/.test(comp) && /ACEITE/.test(n) && !/TRANSMISI|CAJA|DIFERENCIAL|HIDR[AÁ]|DIRECCI[OÓ]N/.test(n)) return true;
+            if(/AIRE/.test(comp) && /(INT|SECUND)/.test(comp) && (/AIR.*INT/.test(n) || /INT.*AIR/.test(n))) return true;
+            if(/AIRE/.test(comp) && /(EXT|PRIMARI)/.test(comp) && /AIRE|AIR/.test(n) && !/INT/.test(n)) return true;
+            if(/HIDR[AÁ]/.test(comp) && /HIDR[AÁ]/.test(n)) return true;
+            if(/TRANSMISI[OÓ]N|CAJA/.test(comp) && /TRANSMISI[OÓ]N|CAJA/.test(n)) return true;
+            if(/DIFERENCIAL/.test(comp) && /DIFERENCIAL/.test(n)) return true;
+            if(/REFRIGERANTE/.test(comp) && /REFRIGERANTE/.test(n)) return true;
+            return false;
+          });
+          if(candidato) mejor = candidato.item.id;
+        }
+        const html = `<option value="">— elegir —</option>` + etiquetados.map(x => `<option value="${x.item.id}" ${x.item.id===mejor?'selected':''}>${esc(x.etiqueta)}</option>`).join('');
+        return {html, mejor};
+      }
+      function pintarFilas(){
+        const cont = $('#pdf-filas');
+        const eqId = $('#pdf-eq').value;
+        const eq = eqId ? eqPorId(eqId) : null;
+        if(!filas.length){ cont.innerHTML = ''; return; }
+        cont.innerHTML = `<div class="sep" style="margin-top:14px">Filas detectadas<small>Desmarque lo que no aplique, corrija lo que haga falta y confirme el componente de cada una antes de cargar.</small></div>
+          <div class="tabla-envoltorio"><table><thead><tr><th></th><th>Referencia</th><th class="num">Costo</th><th>Componente</th></tr></thead><tbody>
+          ${filas.map((f,i) => {
+            const {html, mejor} = opcionesItem(eq, f.itemId, f.nombreDetectado);
+            f.itemId = mejor;
+            return `<tr>
+            <td><input type="checkbox" data-fila="${i}" ${f.incluir?'checked':''}></td>
+            <td><input class="mono" data-ref="${i}" value="${esc(f.referencia)}" style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px 6px"></td>
+            <td class="num"><input type="number" data-costo="${i}" value="${f.costoUnitario??''}" style="width:100px;border:1px solid var(--line);border-radius:4px;padding:4px 6px;text-align:right"></td>
+            <td><select data-item="${i}" ${eq?'':'disabled'} style="width:100%;border:1px solid var(--line);border-radius:4px;padding:4px 6px">${html}</select></td>
+          </tr>`;
+          }).join('')}
+          </tbody></table></div>`;
+        cont.querySelectorAll('[data-fila]').forEach(c => c.onchange = () => { filas[c.dataset.fila].incluir = c.checked; });
+        cont.querySelectorAll('[data-ref]').forEach(c => c.onchange = () => { filas[c.dataset.ref].referencia = c.value; });
+        cont.querySelectorAll('[data-costo]').forEach(c => c.onchange = () => { filas[c.dataset.costo].costoUnitario = c.value===''?null:Number(c.value); });
+        cont.querySelectorAll('[data-item]').forEach(c => c.onchange = () => { filas[c.dataset.item].itemId = c.value || null; });
+        $('#ok').disabled = !(eq && filas.some(f => f.incluir));
+      }
+      $('#pdf-eq').addEventListener('change', pintarFilas);
+      $('#pdf-file').addEventListener('change', async () => {
+        const file = $('#pdf-file').files[0];
+        if(!file) return;
+        $('#pdf-estado').textContent = 'Leyendo el PDF…';
+        filas = []; $('#pdf-filas').innerHTML = '';
+        try{
+          const lineas = await extraerLineasPDF(file);
+          const detectadas = parseFilasCotizacion(lineas);
+          if(!$('#pdf-prov').value.trim()){ const prov = adivinarProveedor(lineas); if(prov) $('#pdf-prov').value = prov; }
+          filas = detectadas.map(d => ({
+            incluir:true,
+            referencia: d.nombre.toUpperCase().startsWith(d.codigo.toUpperCase()) ? d.nombre : (d.codigo+' '+d.nombre),
+            costoUnitario: d.costoUnitario,
+            nombreDetectado: d.nombre,
+            itemId: null
+          }));
+          $('#pdf-estado').textContent = filas.length
+            ? `Se reconocieron ${filas.length} fila(s). Revíselas antes de cargar.`
+            : 'No se reconoció ninguna fila automáticamente. Puede que el formato sea distinto — revise el PDF y digite el proveedor manualmente en la pestaña Proveedores.';
+          pintarFilas();
+        }catch(e){
+          $('#pdf-estado').textContent = 'No se pudo leer el PDF: ' + e.message;
+        }
+      });
+      $('#ok').onclick = async () => {
+        const eqId = $('#pdf-eq').value;
+        const eq = eqId ? eqPorId(eqId) : null;
+        if(!eq) return toast('Elija el equipo.');
+        const prov = $('#pdf-prov').value.trim();
+        const incluidas = filas.filter(f => f.incluir);
+        if(!incluidas.length) return toast('Marque al menos una fila.');
+        const sinItem = incluidas.some(f => !f.itemId);
+        if(sinItem) return toast('Elija a qué componente aplica cada fila marcada.');
+        const sinRef = incluidas.some(f => !f.referencia.trim());
+        if(sinRef) return toast('Ninguna referencia puede quedar vacía.');
+        incluidas.forEach(f => {
+          const it = itemRealPorId(eq, f.itemId);
+          if(!it) return;
+          const entry = {id:nid(), proveedor:prov, componente:it.componente, referencia:f.referencia.trim(), costoUnitario:f.costoUnitario};
+          data.catalogoProveedores.push(entry);
+          const set = new Set(it.proveedorIds||[]);
+          set.add(entry.id); it.proveedorIds = [...set];
+          if(!it.proveedorPreferidoId) it.proveedorPreferidoId = entry.id;
+        });
+        await persistir(); cerrar(); pintarMain(); avisar(incluidas.length+' referencia(s) cargada(s)');
+      };
     });
 }
 
