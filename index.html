@@ -125,6 +125,19 @@
   .linkbtn.del{color:var(--red)}
   .vacio-msg{background:var(--card);border:1px dashed var(--line);border-radius:var(--radius);padding:20px;color:var(--steel);text-align:center}
 
+  /* Tarjeta por proveedor en la pestaña Proveedores: la empresa queda
+     como encabezado propio, separado visualmente de la tabla de
+     referencias, y los equipos que usan cada una se muestran como
+     chips en vez de una lista de texto plano difícil de escanear. */
+  .prov-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);margin-top:18px;overflow:hidden}
+  .prov-card-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;padding:12px 16px;background:#F3F6F4;border-bottom:1px solid var(--line)}
+  .prov-card-head h2{margin:0;font-size:16px}
+  .prov-card-head .meta{font-size:13px;color:var(--steel)}
+  .prov-card .tabla-envoltorio{margin:0}
+  .prov-card table{border:none;border-radius:0}
+  .chip{display:inline-block;padding:2px 9px;margin:2px 4px 2px 0;border-radius:20px;font-size:12px;font-weight:600;background:#E7EDF3;color:#2A4C6B;white-space:nowrap}
+  .chip.vacio{background:none;border:1px dashed var(--line);color:var(--steel);font-weight:400;font-style:italic}
+
   .tarjetas{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
   .tarjeta{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;min-width:132px;flex:1}
   .tarjeta .n{font-size:28px;font-weight:700;line-height:1.1}
@@ -1276,17 +1289,24 @@ function pintarProveedores(){
       </div>
       ${nombres.length ? nombres.map(nombre => {
         const filas = porProveedor.get(nombre).slice().sort((a,b) => a.componente.localeCompare(b.componente));
-        return `<h2 style="margin-top:20px">${esc(nombre)}</h2>
-          <div class="tabla-envoltorio"><table><thead><tr><th>Componente</th><th>Referencia</th><th class="num">Costo unit.</th><th>En uso en</th><th></th></tr></thead>
-          <tbody>${filas.map(f => {
-            const usos = usosDeCatalogo(f.id);
+        const equiposDelProveedor = new Set();
+        const usosPorFila = filas.map(f => { const u = usosDeCatalogo(f.id); u.forEach(c => equiposDelProveedor.add(c)); return u; });
+        return `<div class="prov-card">
+          <div class="prov-card-head">
+            <h2>${esc(nombre)}</h2>
+            <div class="meta">${filas.length} referencia(s) · ${equiposDelProveedor.size} equipo(s)</div>
+          </div>
+          <div class="tabla-envoltorio"><table><thead><tr><th>Componente</th><th>Referencia</th><th class="num">Costo unit.</th><th>Equipos</th><th></th></tr></thead>
+          <tbody>${filas.map((f,i) => {
+            const usos = usosPorFila[i];
             return `<tr>
               <td>${esc(f.componente)}</td>
               <td class="mono">${esc(f.referencia)}</td>
               <td class="num mono">${f.costoUnitario?money(f.costoUnitario):'—'}</td>
-              <td class="mono" style="font-size:13px">${usos.length ? usos.map(esc).join(', ') : '<span style="color:var(--steel)">ninguno todavía</span>'}</td>
+              <td>${usos.length ? usos.map(c=>`<span class="chip">${esc(c)}</span>`).join('') : '<span class="chip vacio">ninguno todavía</span>'}</td>
               <td><button class="linkbtn" data-cat-editar="${f.id}">Editar</button></td></tr>`;
-          }).join('')}</tbody></table></div>`;
+          }).join('')}</tbody></table></div>
+        </div>`;
       }).join('') : '<div class="vacio-msg">Todavía no hay proveedores registrados. Use "+ Agregar proveedor y referencia".</div>'}
     </section>`;
   $('#cat-nuevo').onclick = () => modalCatalogoProveedor(null);
