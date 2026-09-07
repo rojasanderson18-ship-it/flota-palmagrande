@@ -366,7 +366,7 @@ const trabajando = eq => estOp(eq).cuenta;
 let uid = Date.now();
 const nid = () => 'i' + (++uid).toString(36);
 const crearItems = p => p.map(([categoria,componente,unidad,intervalo]) => ({
-  id:nid(), categoria, componente, proveedores:[], proveedorPreferidoId:null, cantidad:null, unidad, intervalo
+  id:nid(), categoria, componente, proveedorIds:[], proveedorPreferidoId:null, cantidad:null, unidad, intervalo
 }));
 function crearPlan(nombre, tipo){
   return {id:nid(), nombre, tipo, medidor: tipo==='camion'?'km':'horas',
@@ -403,11 +403,11 @@ function semilla(){
     equipos.push(Object.assign({id:nid(), tipo:'camion', serie:'', medidor:'km', lectura:0, lecturaFecha:'',
       usoDia:USO_DEF.camion, bitacora:[], operativo:'operativo', planId:plan.id, estado:{}, propios:[]}, c));
   });
-  return {planes, equipos, historial:[], config:{urlBase:'', horizonte:30}};
+  return {planes, equipos, historial:[], config:{urlBase:'', horizonte:30}, catalogoProveedores:[]};
 }
 
 /* ---------------- Estado ---------------- */
-let data = {planes:[], equipos:[], historial:[], config:{urlBase:'', horizonte:30}};
+let data = {planes:[], equipos:[], historial:[], config:{urlBase:'', horizonte:30}, catalogoProveedores:[]};
 let fotos = {};
 let sel = null, planSel = null, vista = 'tablero', filtro = '';
 
@@ -470,14 +470,19 @@ function fijarUltimo(eq, itemId, lectura, fecha){
   eq.estado[itemId] = {ultLectura:lectura, ultFecha:fecha};
 }
 
-/* ---------------- Proveedores por ítem ----------------
-   Cada filtro/lubricante puede tener varias referencias, una por
-   proveedor (a veces se compra en uno, a veces en otro, y el número de
-   parte puede cambiar). proveedorPreferidoId marca cuál se usa por
-   defecto en fichas, requisición y catálogo; al registrar un cambio se
-   puede elegir cuál de todos se usó esa vez. */
+/* ---------------- Catálogo de proveedores ----------------
+   Los proveedores se registran una sola vez, en la pestaña Proveedores
+   (data.catalogoProveedores: proveedor + componente + referencia + costo).
+   Cada filtro/lubricante no escribe esa información de nuevo: solo guarda
+   qué entradas del catálogo le aplican (proveedorIds) y cuál es la
+   preferida (proveedorPreferidoId) — la que se usa por defecto en fichas,
+   requisición y catálogo de referencias. Al registrar un cambio se puede
+   elegir cuál de las elegidas se usó esa vez en particular. */
+const catalogoPorId = id => data.catalogoProveedores.find(c => c.id === id);
+const proveedoresDe = it => (it.proveedorIds || []).map(catalogoPorId).filter(Boolean);
+const catalogoDeComponente = comp => data.catalogoProveedores.filter(c => c.componente.trim().toLowerCase() === comp.trim().toLowerCase());
 function refPreferida(it){
-  const provs = it.proveedores || [];
+  const provs = proveedoresDe(it);
   if(!provs.length) return null;
   return provs.find(p => p.id === it.proveedorPreferidoId) || provs[0];
 }
@@ -485,7 +490,7 @@ function refTexto(it){
   const p = refPreferida(it);
   return p ? p.referencia : '';
 }
-function tieneRef(it){ return !!(it.proveedores && it.proveedores.length); }
+function tieneRef(it){ return !!(it.proveedorIds && it.proveedorIds.length); }
 
 /* ---------------- Fotos ---------------- */
 function comprimirFoto(file){
@@ -781,7 +786,7 @@ function pintarPlanDetalle(plan){
         <th>Componente</th><th>Referencia</th><th class="num">Cantidad</th><th class="num">Cambio cada</th><th></th>
       </tr></thead><tbody>${its.map(i => `
         <tr><td>${esc(i.componente)}</td>
-          <td class="ref mono ${tieneRef(i)?'':'vacio'}">${tieneRef(i)?esc(refTexto(i))+(i.proveedores.length>1?' <span style="color:var(--steel)">+'+(i.proveedores.length-1)+' más</span>':''):'falta digitar'}</td>
+          <td class="ref mono ${tieneRef(i)?'':'vacio'}">${tieneRef(i)?esc(refTexto(i))+(i.proveedorIds.length>1?' <span style="color:var(--steel)">+'+(i.proveedorIds.length-1)+' más</span>':''):'falta digitar'}</td>
           <td class="num">${i.cantidad ? esc(i.cantidad)+' '+esc(i.unidad) : '—'}</td>
           <td class="num mono">${i.intervalo ? nfmt(i.intervalo)+' '+um : '—'}</td>
           <td><button class="linkbtn" data-item="${i.id}">Editar</button></td></tr>`).join('')}
@@ -806,14 +811,11 @@ function pintarPlanDetalle(plan){
   $('#main').querySelectorAll('[data-item]').forEach(b => b.onclick = () => modalItemPlan(plan, plan.items.find(i => i.id === b.dataset.item)));
   $('#plan-editar').onclick = () => modalPlanNombre(plan);
   $('#plan-duplicar').onclick = async () => {
-    const copiarItem = i => {
-      const idsNuevos = new Map((i.proveedores||[]).map(p => [p.id, nid()]));
-      return Object.assign({}, i, {id:nid(),
-        proveedores:(i.proveedores||[]).map(p => Object.assign({}, p, {id:idsNuevos.get(p.id)})),
-        proveedorPreferidoId: idsNuevos.get(i.proveedorPreferidoId) || null});
-    };
+    /* Los proveedores viven en el catálogo global (data.catalogoProveedores),
+       así que duplicar solo copia la lista de IDs que aplican — no hay nada
+       que clonar en profundidad. */
     const copia = {id:nid(), nombre:plan.nombre+' (copia)', tipo:plan.tipo, medidor:plan.medidor,
-                   items:plan.items.map(copiarItem)};
+                   items:plan.items.map(i => Object.assign({}, i, {id:nid(), proveedorIds:[...(i.proveedorIds||[])]}))};
     data.planes.push(copia); planSel = copia.id;
     await persistir(); pintarMain(); avisar('Hoja duplicada');
   };
@@ -875,58 +877,77 @@ function modalPlanNombre(plan){
       plan.nombre = n; await persistir(); cerrar(); pintarMain(); avisar('Hoja renombrada');
     };});
 }
-/* ---------------- Gestor de proveedores dentro del editor de un ítem ----------------
-   Varias filas (proveedor + referencia + costo unitario), una marcada como
-   preferida. Se manipula el DOM directamente (agregar/quitar filas) en vez
-   de llevar un estado JS aparte, para no perder lo que la persona ya iba
-   escribiendo en las demás filas. */
-function filaProveedor(p, preferidoId){
-  return `<div class="fila" data-pv="${p.id}" style="align-items:flex-end;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line)">
-    <label class="f" style="flex:2;margin-bottom:0">Proveedor<input class="mono pv-nombre" value="${esc(p.proveedor||'')}" placeholder="Distribuidora XYZ"></label>
-    <label class="f" style="flex:2;margin-bottom:0">Referencia<input class="mono pv-ref" value="${esc(p.referencia||'')}" placeholder="HH150-32430"></label>
-    <label class="f" style="flex:1;margin-bottom:0">Costo unit.<input type="number" class="pv-costo" value="${p.costoUnitario??''}" placeholder="0"></label>
-    <label style="display:flex;align-items:center;gap:4px;margin-bottom:8px;font-size:13px;white-space:nowrap"><input type="radio" name="pv-pref-${p._grupo||''}" value="${p.id}" ${p.id===preferidoId?'checked':''}> Preferido</label>
-    <button type="button" class="linkbtn del" data-pvdel style="margin-bottom:8px">Quitar</button>
+/* ---------------- Selector de proveedores dentro del editor de un ítem ----------------
+   No se escribe proveedor/referencia/costo aquí: se elige entre lo que ya
+   está registrado en la pestaña Proveedores para el componente que se está
+   escribiendo en #comp (o se agrega uno nuevo rápido, sin salir del
+   modal). Todo el estado se lleva en JS y se re-dibuja completo en cada
+   cambio, así que nunca hay que sincronizar el DOM a mano. */
+function filaAltaRapidaCatalogo(idGrupo){
+  return `<div class="fila" style="align-items:flex-end;margin-top:4px">
+    <label class="f" style="flex:2;margin-bottom:0">Proveedor nuevo<input class="mono" id="pk-prov-${idGrupo}" placeholder="Distribuidora XYZ"></label>
+    <label class="f" style="flex:2;margin-bottom:0">Referencia<input class="mono" id="pk-ref-${idGrupo}" placeholder="HH150-32430"></label>
+    <label class="f" style="flex:1;margin-bottom:0">Costo unit.<input type="number" id="pk-costo-${idGrupo}" placeholder="0"></label>
+    <button type="button" class="btn sec" id="pk-agregar-${idGrupo}" style="margin-bottom:0">+ Agregar</button>
   </div>`;
 }
 function htmlProveedores(it, idGrupo){
-  const provs = (it.proveedores||[]).map(p => Object.assign({}, p, {_grupo:idGrupo}));
-  return `<div class="sep" style="margin-top:0">Proveedores<small>Puede tener varios (a veces se compra en uno, a veces en otro); marque cuál usar por defecto.</small></div>
-    <div id="provs-${idGrupo}">${provs.map(p => filaProveedor(p, it.proveedorPreferidoId)).join('')}</div>
-    <button type="button" class="btn sec" id="prov-agregar-${idGrupo}" style="margin-bottom:14px">+ Agregar proveedor</button>`;
+  return `<div class="sep" style="margin-top:0">Proveedores<small>Elija cuáles de los proveedores ya registrados (pestaña Proveedores) aplican a este componente, y marque el preferido. También puede agregar uno nuevo aquí mismo.</small></div>
+    <div id="provs-${idGrupo}"></div>`;
 }
-/* onMount: engancha agregar/quitar filas. Llamar dentro del onMount del abrir(). */
-function wireProveedores(idGrupo){
-  const lista = $('#provs-'+idGrupo);
-  lista.addEventListener('click', e => {
-    const btn = e.target.closest('[data-pvdel]');
-    if(btn) btn.closest('[data-pv]').remove();
-  });
-  $('#prov-agregar-'+idGrupo).onclick = () => {
-    const esPrimero = !lista.querySelector('[data-pv]');
-    const nuevoId = nid();
-    lista.insertAdjacentHTML('beforeend', filaProveedor({id:nuevoId, proveedor:'', referencia:'', costoUnitario:null, _grupo:idGrupo}, esPrimero ? nuevoId : null));
-  };
-}
-/* Lee las filas del DOM al guardar. Descarta las que quedaron sin referencia. */
-function leerProveedores(idGrupo){
-  const lista = $('#provs-'+idGrupo);
-  const provs = [...lista.querySelectorAll('[data-pv]')].map(row => ({
-    id: row.dataset.pv,
-    proveedor: row.querySelector('.pv-nombre').value.trim(),
-    referencia: row.querySelector('.pv-ref').value.trim(),
-    costoUnitario: row.querySelector('.pv-costo').value === '' ? null : Number(row.querySelector('.pv-costo').value)
-  })).filter(p => p.referencia);
-  const marcado = lista.querySelector('input[type=radio]:checked');
-  let preferidoId = marcado ? marcado.value : null;
-  if(!provs.some(p => p.id === preferidoId)) preferidoId = provs[0] ? provs[0].id : null;
-  return {proveedores:provs, proveedorPreferidoId:preferidoId};
+/* onMount: dibuja el selector y devuelve una función para leer el resultado
+   al guardar. Llamar dentro del onMount del abrir(), después de que #comp
+   ya esté en el DOM. */
+function wireProveedores(idGrupo, it){
+  const estado = {seleccion:new Set(it.proveedorIds||[]), preferido:it.proveedorPreferidoId||null, nuevos:[]};
+  const compActual = () => ($('#comp')?.value || it.componente || '').trim();
+  function redibujar(){
+    const comp = compActual();
+    const opciones = comp ? catalogoDeComponente(comp).concat(estado.nuevos.filter(n => n.componente.trim().toLowerCase()===comp.toLowerCase())) : [];
+    const cont = $('#provs-'+idGrupo);
+    if(!cont) return;
+    const filas = opciones.map(op => `
+      <tr>
+        <td style="width:26px"><input type="checkbox" data-pick="${op.id}" ${estado.seleccion.has(op.id)?'checked':''}></td>
+        <td>${esc(op.proveedor||'(sin nombre)')}</td>
+        <td class="mono">${esc(op.referencia)}</td>
+        <td class="num mono">${op.costoUnitario?money(op.costoUnitario):'—'}</td>
+        <td style="text-align:center"><input type="radio" data-pref="${op.id}" name="pk-pref-${idGrupo}" ${estado.preferido===op.id?'checked':''} ${estado.seleccion.has(op.id)?'':'disabled'}></td>
+      </tr>`).join('');
+    cont.innerHTML = (opciones.length
+      ? `<table style="margin-bottom:10px"><thead><tr><th></th><th>Proveedor</th><th>Referencia</th><th class="num">Costo</th><th>Preferido</th></tr></thead><tbody>${filas}</tbody></table>`
+      : `<p class="hint" style="margin:0 0 10px">${comp ? 'No hay proveedores registrados todavía para "'+esc(comp)+'".' : 'Escriba primero el componente.'} Puede agregar uno rápido aquí, o ir a la pestaña <strong>Proveedores</strong>.</p>`)
+      + (comp ? filaAltaRapidaCatalogo(idGrupo) : '');
+    cont.querySelectorAll('[data-pick]').forEach(chk => chk.onchange = () => {
+      const id = chk.dataset.pick;
+      if(chk.checked){ estado.seleccion.add(id); if(!estado.preferido) estado.preferido = id; }
+      else { estado.seleccion.delete(id); if(estado.preferido===id) estado.preferido = [...estado.seleccion][0] || null; }
+      redibujar();
+    });
+    cont.querySelectorAll('[data-pref]').forEach(rad => rad.onchange = () => { estado.preferido = rad.dataset.pref; redibujar(); });
+    const btnAlta = $('#pk-agregar-'+idGrupo);
+    if(btnAlta) btnAlta.onclick = () => {
+      const prov = $('#pk-prov-'+idGrupo).value.trim();
+      const ref = $('#pk-ref-'+idGrupo).value.trim();
+      const costoTxt = $('#pk-costo-'+idGrupo).value;
+      if(!ref) return toast('Escriba la referencia del proveedor nuevo.');
+      const nueva = {id:nid(), proveedor:prov, componente:comp, referencia:ref, costoUnitario: costoTxt===''?null:Number(costoTxt)};
+      estado.nuevos.push(nueva);
+      estado.seleccion.add(nueva.id);
+      if(!estado.preferido) estado.preferido = nueva.id;
+      redibujar();
+    };
+  }
+  redibujar();
+  const inputComp = $('#comp');
+  if(inputComp) inputComp.addEventListener('input', redibujar);
+  return () => ({proveedorIds:[...estado.seleccion], proveedorPreferidoId:estado.preferido, nuevosCatalogo:estado.nuevos});
 }
 function modalItemPlan(plan, it){
   const nuevo = !it;
   const um = plan.medidor === 'km' ? 'km' : 'h';
   const eqs = equiposDePlan(plan.id);
-  it = it || {id:nid(), categoria:'filtro', componente:'', proveedores:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null};
+  it = it || {id:nid(), categoria:'filtro', componente:'', proveedorIds:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null};
   abrir(`<h3>${nuevo?'Agregar elemento':'Editar elemento'} — ${esc(plan.nombre)}</h3>
     <div class="body">
       ${eqs.length>1 ? `<div class="aviso">Este cambio aplica a los ${eqs.length} equipos con esta hoja: ${eqs.map(e=>esc(e.codigo)).join(', ')}.</div>` : ''}
@@ -946,13 +967,15 @@ function modalItemPlan(plan, it){
     <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar</button>'}
       <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
     () => {
-      wireProveedores('plan');
+      const leerProv = wireProveedores('plan', it);
       $('#ok').onclick = async () => {
         const comp = $('#comp').value.trim();
         if(!comp) return toast('Escriba el nombre del componente.');
+        const {proveedorIds, proveedorPreferidoId, nuevosCatalogo} = leerProv();
+        nuevosCatalogo.forEach(n => data.catalogoProveedores.push(n));
         Object.assign(it, {categoria:$('#cat').value, componente:comp,
           cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
-          intervalo:$('#int').value===''?null:Number($('#int').value)}, leerProveedores('plan'));
+          intervalo:$('#int').value===''?null:Number($('#int').value), proveedorIds, proveedorPreferidoId});
         if(nuevo) plan.items.push(it);
         await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Configuración guardada');
       };
@@ -1073,38 +1096,95 @@ function pintarReferencias(){
 /* =====================================================================
    Proveedores
    ===================================================================== */
+function usosDeCatalogo(catId){
+  const usos = [];
+  data.equipos.forEach(eq => itemsDe(eq).forEach(it => { if((it.proveedorIds||[]).includes(catId)) usos.push(eq.codigo); }));
+  return usos;
+}
+function componentesExistentes(){
+  const set = new Set();
+  data.planes.forEach(p => p.items.forEach(i => set.add(i.componente)));
+  data.equipos.forEach(e => (e.propios||[]).forEach(i => set.add(i.componente)));
+  return [...set].sort();
+}
 function pintarProveedores(){
   const porProveedor = new Map();
-  data.equipos.forEach(eq => itemsDe(eq).forEach(it => (it.proveedores||[]).forEach(pv => {
-    if(!pv.referencia) return;
-    const nombre = (pv.proveedor||'').trim() || '(sin nombre digitado)';
-    if(!porProveedor.has(nombre)) porProveedor.set(nombre, new Map());
-    const refs = porProveedor.get(nombre);
-    const k = it.id+'|'+pv.id;
-    if(!refs.has(k)) refs.set(k, {referencia:pv.referencia, componente:it.componente, costoUnitario:pv.costoUnitario,
-      preferida: it.proveedorPreferidoId === pv.id, equipos:new Set()});
-    refs.get(k).equipos.add(eq.codigo);
-  })));
+  data.catalogoProveedores.forEach(c => {
+    const nombre = (c.proveedor||'').trim() || '(sin nombre digitado)';
+    if(!porProveedor.has(nombre)) porProveedor.set(nombre, []);
+    porProveedor.get(nombre).push(c);
+  });
   const nombres = [...porProveedor.keys()].sort((a,b) => a.localeCompare(b));
   $('#main').innerHTML = `
     <section class="bloque" style="padding-top:24px">
       <h1 class="titulo-vista">Proveedores</h1>
-      <p class="hint">Qué le compra a cada proveedor, en cuáles equipos y a qué costo unitario. "Preferido" marca cuál es el que se usa por defecto para ese repuesto en fichas y requisición; los demás quedan aquí guardados por si toca volver a ellos.</p>
+      <p class="hint">Registre aquí cada proveedor con sus referencias y costos. Al editar un filtro o lubricante en Configuración o en la ficha de un equipo, se elige de esta lista en vez de escribirlo de nuevo.</p>
+      <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
+        <button class="btn" id="cat-nuevo">+ Agregar proveedor y referencia</button>
+      </div>
       <div class="tarjetas">
-        <div class="tarjeta"><div class="n">${nombres.length}</div><div class="t">Proveedores con al menos una referencia</div></div>
+        <div class="tarjeta"><div class="n">${data.catalogoProveedores.length}</div><div class="t">Referencias registradas</div></div>
+        <div class="tarjeta"><div class="n">${nombres.length}</div><div class="t">Proveedores distintos</div></div>
       </div>
       ${nombres.length ? nombres.map(nombre => {
-        const filas = [...porProveedor.get(nombre).values()].sort((a,b) => a.componente.localeCompare(b.componente));
+        const filas = porProveedor.get(nombre).slice().sort((a,b) => a.componente.localeCompare(b.componente));
         return `<h2 style="margin-top:20px">${esc(nombre)}</h2>
-          <table><thead><tr><th>Componente</th><th>Referencia</th><th class="num">Costo unit.</th><th>Equipos</th><th></th></tr></thead>
-          <tbody>${filas.map(f => `<tr>
-            <td>${esc(f.componente)}</td>
-            <td class="mono">${esc(f.referencia)}</td>
-            <td class="num mono">${f.costoUnitario?money(f.costoUnitario):'—'}</td>
-            <td class="mono" style="font-size:13px">${[...f.equipos].map(esc).join(', ')}</td>
-            <td>${f.preferida?'<span class="badge ok">Preferido</span>':''}</td></tr>`).join('')}</tbody></table>`;
-      }).join('') : '<div class="vacio-msg">Todavía no hay proveedores digitados. Agréguelos al editar un filtro o lubricante en Configuración.</div>'}
+          <table><thead><tr><th>Componente</th><th>Referencia</th><th class="num">Costo unit.</th><th>En uso en</th><th></th></tr></thead>
+          <tbody>${filas.map(f => {
+            const usos = usosDeCatalogo(f.id);
+            return `<tr>
+              <td>${esc(f.componente)}</td>
+              <td class="mono">${esc(f.referencia)}</td>
+              <td class="num mono">${f.costoUnitario?money(f.costoUnitario):'—'}</td>
+              <td class="mono" style="font-size:13px">${usos.length ? usos.map(esc).join(', ') : '<span style="color:var(--steel)">ninguno todavía</span>'}</td>
+              <td><button class="linkbtn" data-cat-editar="${f.id}">Editar</button></td></tr>`;
+          }).join('')}</tbody></table>`;
+      }).join('') : '<div class="vacio-msg">Todavía no hay proveedores registrados. Use "+ Agregar proveedor y referencia".</div>'}
     </section>`;
+  $('#cat-nuevo').onclick = () => modalCatalogoProveedor(null);
+  $('#main').querySelectorAll('[data-cat-editar]').forEach(b => b.onclick = () =>
+    modalCatalogoProveedor(data.catalogoProveedores.find(c => c.id === b.dataset.catEditar)));
+}
+function limpiarRefCatalogo(it, catId){
+  if(!it.proveedorIds) return;
+  it.proveedorIds = it.proveedorIds.filter(id => id !== catId);
+  if(it.proveedorPreferidoId === catId) it.proveedorPreferidoId = it.proveedorIds[0] || null;
+}
+function modalCatalogoProveedor(entry){
+  const nuevo = !entry;
+  entry = entry || {id:nid(), proveedor:'', componente:'', referencia:'', costoUnitario:null};
+  const comps = componentesExistentes();
+  abrir(`<h3>${nuevo?'Agregar proveedor y referencia':'Editar'}</h3>
+    <div class="body">
+      <label class="f">Proveedor<input id="cp-prov" value="${esc(entry.proveedor)}" placeholder="Distribuidora XYZ"></label>
+      <label class="f">Componente<input id="cp-comp" list="cp-comp-lista" value="${esc(entry.componente)}" placeholder="Filtro de aceite de motor"></label>
+      <datalist id="cp-comp-lista">${comps.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <label class="f">Referencia<input id="cp-ref" class="mono" value="${esc(entry.referencia)}" placeholder="HH150-32430"></label>
+      <label class="f">Costo unitario<input type="number" id="cp-costo" value="${entry.costoUnitario??''}"></label>
+    </div>
+    <div class="pie">${nuevo?'':'<button class="btn danger" id="cp-del" style="margin-right:auto">Eliminar</button>'}
+      <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
+    () => {
+      $('#ok').onclick = async () => {
+        const prov = $('#cp-prov').value.trim();
+        const comp = $('#cp-comp').value.trim();
+        const ref = $('#cp-ref').value.trim();
+        if(!comp) return toast('Escriba el componente (debe coincidir con el nombre usado en Configuración).');
+        if(!ref) return toast('Escriba la referencia.');
+        Object.assign(entry, {proveedor:prov, componente:comp, referencia:ref,
+          costoUnitario:$('#cp-costo').value===''?null:Number($('#cp-costo').value)});
+        if(nuevo) data.catalogoProveedores.push(entry);
+        await persistir(); cerrar(); pintarMain(); avisar('Proveedor guardado');
+      };
+      const d = $('#cp-del');
+      if(d) d.onclick = () => confirmar('Eliminar de Proveedores',
+        'Se quita esta referencia del catálogo. Los ítems que la tenían elegida dejan de mostrarla (si era la preferida, queda sin ella).', async () => {
+          data.catalogoProveedores = data.catalogoProveedores.filter(c => c.id !== entry.id);
+          data.planes.forEach(p => p.items.forEach(it => limpiarRefCatalogo(it, entry.id)));
+          data.equipos.forEach(eq => (eq.propios||[]).forEach(it => limpiarRefCatalogo(it, entry.id)));
+          await persistir(); pintarMain(); avisar('Eliminado del catálogo');
+        });
+    });
 }
 
 /* =====================================================================
@@ -1205,7 +1285,7 @@ function tablaItems(eq, categoria){
       const p = proyeccion(eq,it);
       return `<tr>
         <td>${esc(it.componente)}${it.origen==='propio'?' <span class="badge propio">solo este equipo</span>':''}</td>
-        <td class="ref mono ${tieneRef(it)?'':'vacio'}">${tieneRef(it)?esc(refTexto(it))+(it.proveedores.length>1?' <span style="color:var(--steel)">+'+(it.proveedores.length-1)+'</span>':''):'sin referencia'}</td>
+        <td class="ref mono ${tieneRef(it)?'':'vacio'}">${tieneRef(it)?esc(refTexto(it))+(it.proveedorIds.length>1?' <span style="color:var(--steel)">+'+(it.proveedorIds.length-1)+'</span>':''):'sin referencia'}</td>
         <td class="num">${it.cantidad ? esc(it.cantidad)+' '+esc(it.unidad) : '—'}</td>
         <td class="num mono">${it.intervalo ? nfmt(it.intervalo)+' '+u(eq) : '—'}</td>
         <td class="num mono">${it.ultLectura!=null ? nfmt(it.ultLectura)+' '+u(eq) : '—'}</td>
@@ -1336,7 +1416,7 @@ function modalItemEquipo(eq, it){
   const plan = planPorId(eq.planId);
   const eqs = plan ? equiposDePlan(plan.id) : [];
   const esPlan = it ? it.origen === 'plan' : true;
-  const base = it || {id:nid(), categoria:'filtro', componente:'', proveedores:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null, ultLectura:null, ultFecha:''};
+  const base = it || {id:nid(), categoria:'filtro', componente:'', proveedorIds:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null, ultLectura:null, ultFecha:''};
   abrir(`<h3>${nuevo?'Agregar filtro o aceite':'Editar'} — ${esc(eq.codigo)}</h3>
     <div class="body">
       ${nuevo ? `<label class="f">¿A quién aplica?<select id="alcance">
@@ -1364,13 +1444,15 @@ function modalItemEquipo(eq, it){
     <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar</button>'}
       <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
     () => {
-      wireProveedores('eq');
+      const leerProv = wireProveedores('eq', base);
       $('#ok').onclick = async () => {
         const comp = $('#comp').value.trim();
         if(!comp) return toast('Escriba el nombre del componente.');
+        const {proveedorIds, proveedorPreferidoId, nuevosCatalogo} = leerProv();
+        nuevosCatalogo.forEach(n => data.catalogoProveedores.push(n));
         const def = Object.assign({categoria:$('#cat').value, componente:comp,
           cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
-          intervalo:$('#int').value===''?null:Number($('#int').value)}, leerProveedores('eq'));
+          intervalo:$('#int').value===''?null:Number($('#int').value), proveedorIds, proveedorPreferidoId});
         let id = base.id;
         if(nuevo){
           const alPlan = $('#alcance').value === 'plan' && plan;
@@ -1634,7 +1716,7 @@ function pintarDatos(){
       try{
         const d = JSON.parse(await f.text());
         if(!d.equipos) throw new Error('formato');
-        data = {planes:d.planes||[], equipos:d.equipos, historial:d.historial||[], config:d.config||{urlBase:'',horizonte:30}};
+        data = {planes:d.planes||[], equipos:d.equipos, historial:d.historial||[], config:d.config||{urlBase:'',horizonte:30}, catalogoProveedores:d.catalogoProveedores||[]};
         fotos = d.fotos || {};
         if(!data.planes.length) migrarAPlanes();
         normalizar(); sel = data.equipos[0] ? data.equipos[0].id : null;
@@ -1811,7 +1893,7 @@ function modalCambio(eq){
       <label class="f">Qué se cambió</label>
       <div id="items">${items.map(it => {
         const p = proyeccion(eq,it);
-        const provs = it.proveedores || [];
+        const provs = proveedoresDe(it);
         const selector = provs.length>1 ? `<select class="prov-usado" data-for="${it.id}" style="display:block;margin-top:4px;font-size:12px;padding:3px 6px;width:100%">
             ${provs.map(pv => `<option value="${pv.id}" ${pv.id===it.proveedorPreferidoId?'selected':''}>${esc(pv.proveedor||'(sin nombre)')} — ${esc(pv.referencia)}</option>`).join('')}
           </select>` : '';
@@ -1841,7 +1923,7 @@ function modalCambio(eq){
           fijarUltimo(eq, id, lectura, fecha);
           const sel = $('#items').querySelector('select.prov-usado[data-for="'+id+'"]');
           const provId = sel ? sel.value : it.proveedorPreferidoId;
-          const prov = (it.proveedores||[]).find(pv => pv.id === provId) || null;
+          const prov = proveedoresDe(it).find(pv => pv.id === provId) || null;
           return {itemId:id, componente:it.componente, proveedor: prov ? prov.proveedor : '',
             referencia: prov ? prov.referencia : '', cantidad:it.cantidad, unidad:it.unidad};
         });
@@ -1861,19 +1943,28 @@ function pintarMain(){
              referencias:pintarReferencias, proveedores:pintarProveedores, costos:pintarCostos, hist:pintarHistorial, datos:pintarDatos}[vista];
   (f || pintarTablero)();
 }
-/* Convierte una referencia suelta (versión anterior, un texto por ítem) en
-   la lista de proveedores nueva, sin perder lo que ya había digitado. */
+/* Convierte formatos anteriores de un ítem (referencia suelta como texto,
+   o proveedores embebidos dentro del propio ítem) al catálogo global de
+   proveedores nuevo, sin perder lo que ya había digitado. Requiere que
+   data.catalogoProveedores ya exista. */
 function migrarRefItem(it){
-  if(!it.proveedores){
-    it.proveedores = it.referencia ? [{id:nid(), proveedor:'', referencia:it.referencia, costoUnitario:null}] : [];
-    it.proveedorPreferidoId = it.proveedores[0] ? it.proveedores[0].id : null;
-  }
+  if(it.proveedorIds) return;
+  const embebidos = it.proveedores || (it.referencia ? [{proveedor:'', referencia:it.referencia, costoUnitario:null}] : []);
+  it.proveedorIds = embebidos.filter(p => p.referencia).map(p => {
+    const entrada = {id:nid(), proveedor:p.proveedor||'', componente:it.componente, referencia:p.referencia, costoUnitario:p.costoUnitario ?? null};
+    data.catalogoProveedores.push(entrada);
+    return entrada.id;
+  });
+  const idxViejo = (embebidos||[]).findIndex(p => p.id === it.proveedorPreferidoId);
+  it.proveedorPreferidoId = (idxViejo >= 0 && it.proveedorIds[idxViejo]) ? it.proveedorIds[idxViejo] : (it.proveedorIds[0] || null);
+  delete it.proveedores;
   delete it.referencia;
 }
 function normalizar(){
   data.config = data.config || {urlBase:'', horizonte:30};
   data.historial = data.historial || [];
   data.planes = data.planes || [];
+  data.catalogoProveedores = data.catalogoProveedores || [];
   data.planes.forEach(p => p.items.forEach(migrarRefItem));
   data.equipos.forEach(e => {
     e.bitacora = e.bitacora || [];
