@@ -337,19 +337,29 @@ async function remotoObtenerFoto(id){ const j = await remoto('get_foto', id); re
    internet); si no, se está pidiendo al backend en segundo plano (ver
    asegurarFotos) y aparece en cuanto llegue. */
 const fotoDe = eq => fotos[eq.id] || null;
+/* El comprobante firmado (foto/escaneo de la hoja ya firmada por las 4
+   personas de la jerarquía) se guarda con el mismo mecanismo que las
+   fotos de equipo — mismo objeto `fotos`, mismo backend de Drive — solo
+   que la llave es el id del registro de historial en vez del id del
+   equipo, para que quede asociado a ESE cambio en particular y sirva de
+   trazabilidad (que sí se hizo, que sí lo firmaron). */
+const comprobanteDe = h => fotos[h.id] || null;
 /* Trae del backend las fotos que este dispositivo todavía no tiene en su
-   copia local (por ejemplo, equipos con foto subida desde otro
-   dispositivo). Se llama al cargar y al sincronizar; no bloquea el resto
-   de la app mientras las va trayendo. */
+   copia local (equipos con foto subida desde otro dispositivo, o
+   comprobantes firmados subidos desde el celular del mecánico). Se llama
+   al cargar y al sincronizar; no bloquea el resto de la app mientras las
+   va trayendo. */
 async function asegurarFotos(){
   if(!backendConf()) return;
-  const faltantes = data.equipos.filter(eq => eq.fotoUrl && !fotos[eq.id]);
+  const faltantesEq = data.equipos.filter(eq => eq.fotoUrl && !fotos[eq.id]).map(x => ({id:x.id}));
+  const faltantesHist = data.historial.filter(h => h.comprobanteFirmado && !fotos[h.id]).map(x => ({id:x.id}));
+  const faltantes = faltantesEq.concat(faltantesHist);
   if(!faltantes.length) return;
   let huboAlguna = false;
-  for(const eq of faltantes){
+  for(const x of faltantes){
     try{
-      const dataUrl = await remotoObtenerFoto(eq.id);
-      if(dataUrl){ fotos[eq.id] = dataUrl; huboAlguna = true; }
+      const dataUrl = await remotoObtenerFoto(x.id);
+      if(dataUrl){ fotos[x.id] = dataUrl; huboAlguna = true; }
     }catch(e){ /* se reintenta la próxima vez que se sincronice */ }
   }
   if(huboAlguna){ await DB.guardarFotos(fotos); pintarLista(); pintarMain(); }
@@ -638,6 +648,73 @@ function elegirFoto(eq){
     }
   };
   inp.click();
+}
+/* Igual que elegirFoto pero para el comprobante firmado de UN cambio del
+   historial (h), no de la ficha del equipo. */
+function elegirComprobante(h){
+  const inp = document.createElement('input');
+  inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if(!f) return;
+    toast('Procesando foto…');
+    let dataUrl;
+    try{ dataUrl = await comprimirFoto(f); }
+    catch(e){ return toast('No se pudo leer esa imagen. Intente con otra.'); }
+    fotos[h.id] = dataUrl;
+    if(!await DB.guardarFotos(fotos)){ delete fotos[h.id]; return; }
+    pintarMain(); toast('Comprobante guardado en este dispositivo');
+    if(backendConf()){
+      toast('Subiendo comprobante al backend…');
+      try{
+        await remotoSubirFoto(h.id, dataUrl);
+        h.comprobanteFirmado = true;
+        await persistir();
+        pintarMain(); toast('Comprobante sincronizado');
+      }catch(e){ toast('El comprobante quedó guardado en este dispositivo, pero no se pudo subir al backend: ' + e.message); }
+    }
+  };
+  inp.click();
+}
+/* Muestra el comprobante firmado ya subido, con opción de reemplazarlo o
+   quitarlo. Si este dispositivo todavía no lo tiene descargado (se subió
+   desde otro celular) intenta traerlo del backend en el momento. */
+function modalVerComprobante(h){
+  abrir(`<h3>Comprobante firmado</h3>
+    <div class="body" id="ver-comp-body" style="text-align:center">
+      ${comprobanteDe(h) ? `<img src="${esc(comprobanteDe(h))}" alt="" style="max-width:100%;border:1px solid var(--line);border-radius:var(--radius)">`
+        : '<p class="hint">Descargando del backend…</p>'}
+    </div>
+    <div class="pie">
+      <button class="btn danger" id="quitar" style="margin-right:auto">Quitar</button>
+      <button class="btn sec" data-cerrar>Cerrar</button>
+      <button class="btn" id="reemplazar">Reemplazar</button>
+    </div>`,
+    () => {
+      if(!comprobanteDe(h) && h.comprobanteFirmado && backendConf()){
+        remotoObtenerFoto(h.id).then(async dataUrl => {
+          if(!dataUrl) return;
+          fotos[h.id] = dataUrl;
+          await DB.guardarFotos(fotos);
+          const cont = $('#ver-comp-body');
+          if(cont) cont.innerHTML = `<img src="${esc(dataUrl)}" alt="" style="max-width:100%;border:1px solid var(--line);border-radius:var(--radius)">`;
+        }).catch(() => {
+          const cont = $('#ver-comp-body');
+          if(cont) cont.innerHTML = '<p class="hint">No se pudo descargar. Verifique la conexión e intente de nuevo.</p>';
+        });
+      }
+      $('#reemplazar').onclick = () => { cerrar(); elegirComprobante(h); };
+      $('#quitar').onclick = () => confirmar('Quitar comprobante firmado',
+        'Se borra la foto del comprobante firmado de este cambio. El registro del historial queda intacto.', async () => {
+          delete fotos[h.id];
+          await DB.guardarFotos(fotos);
+          if(h.comprobanteFirmado){
+            h.comprobanteFirmado = null;
+            await persistir();
+            if(backendConf()) remotoBorrarFoto(h.id).catch(() => {});
+          }
+          cerrar(); pintarMain(); avisar('Comprobante eliminado');
+        });
+    });
 }
 
 /* ---------------- Cálculos ---------------- */
@@ -1956,6 +2033,7 @@ function pintarFicha(){
               <div style="color:var(--steel);font-size:12px">${fechaHora(h.registrado) ? 'Registrado '+esc(fechaHora(h.registrado))+(desfaseRegistro(h)>1?' ('+desfaseRegistro(h)+' días después)':'') : 'Sin sello de registro'}</div></td>
             <td class="num mono">${h.costo?money(h.costo):'—'}</td>
             <td><button class="linkbtn" data-comp="${h.id}">Comprobante</button><br>
+              <button class="linkbtn" data-firmado="${h.id}">${comprobanteDe(h)||h.comprobanteFirmado?'Ver firmado':'Subir firmado'}</button><br>
               <button class="linkbtn del" data-del-hist="${h.id}">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`
         : '<div class="vacio-msg">Sin cambios registrados. Use “Registrar cambio” cuando se intervenga el equipo.</div>'}
     </section>`;
@@ -1991,8 +2069,19 @@ function pintarFicha(){
     const h = data.historial.find(x => x.id === b.dataset.comp);
     if(h) imprimirComprobante(h);
   });
+  $('#main').querySelectorAll('[data-firmado]').forEach(b => b.onclick = () => {
+    const h = data.historial.find(x => x.id === b.dataset.firmado);
+    if(!h) return;
+    if(comprobanteDe(h) || h.comprobanteFirmado) modalVerComprobante(h);
+    else elegirComprobante(h);
+  });
   $('#main').querySelectorAll('[data-del-hist]').forEach(b => b.onclick = async () => {
-    data.historial = data.historial.filter(h => h.id !== b.dataset.delHist);
+    const h = data.historial.find(x => x.id === b.dataset.delHist);
+    data.historial = data.historial.filter(x => x.id !== b.dataset.delHist);
+    if(h){
+      delete fotos[h.id]; await DB.guardarFotos(fotos);
+      if(h.comprobanteFirmado && backendConf()) remotoBorrarFoto(h.id).catch(() => {});
+    }
     await persistir(); pintarMain(); avisar('Registro eliminado');
   });
   dibujarQR($('#qr-ficha'), textoQR(eq), 112);
