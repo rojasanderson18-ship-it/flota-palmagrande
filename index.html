@@ -240,7 +240,7 @@
     .p-items th:nth-child(5),.p-items td:nth-child(5){width:15%}
     .p-items th:nth-child(6),.p-items td:nth-child(6){width:16%}
     #print-area tr{page-break-inside:avoid}
-    .p-firma{margin-top:26px;display:flex;gap:40px;font-size:11px}
+    .p-firma{margin-top:50px;display:flex;gap:40px;font-size:11px}
     .p-firma div{flex:1;border-top:1px solid #333;padding-top:4px}
     .p-pie{margin-top:16px;font-size:10px;color:#666;border-top:1px solid #CCC;padding-top:6px}
     .p-datos{margin-bottom:4px}
@@ -2155,6 +2155,7 @@ function imprimirComprobante(h){
   $('#print-area').innerHTML = `
     <div class="p-comp">
       <div class="p-head">
+        ${fotoDe(eq) ? `<img class="p-foto" src="${esc(fotoDe(eq))}" alt="">` : ''}
         <div>
           <div style="font-size:11px;color:#555;letter-spacing:.04em">PALMA GRANDE S.A.S. · PUERTO CONCORDIA, META</div>
           <div class="p-cod" style="font-size:19px">Comprobante de mantenimiento</div>
