@@ -645,7 +645,7 @@ function proximosMeses(n){
    ===================================================================== */
 const VISTAS = [
   ['tablero','Tablero'], ['fichas','Fichas'], ['planes','Configuración'], ['requisicion','Requisición'],
-  ['referencias','Referencias'], ['costos','Costos'], ['hist','Historial'], ['datos','Datos']
+  ['referencias','Referencias'], ['proveedores','Proveedores'], ['costos','Costos'], ['hist','Historial'], ['datos','Datos']
 ];
 function pintarNav(){
   $('#nav').innerHTML = VISTAS.map(([k,t]) => `<button data-v="${k}" aria-current="${vista===k}">${t}</button>`).join('');
@@ -1067,6 +1067,43 @@ function pintarReferencias(){
           <td class="num mono">${f.anual ? f.anual.toFixed(1)+' '+esc(f.unidad) : '—'}</td></tr>`).join('')}</tbody></table>
         <p class="hint" style="margin-top:12px">El consumo al año se calcula con el uso diario de cada equipo y el intervalo de cambio. Es un estimado para pedir, no un dato contable.</p>`
       : '<div class="vacio-msg">Todavía no hay referencias digitadas. Vaya a Configuración y llene la hoja de cada modelo.</div>'}
+    </section>`;
+}
+
+/* =====================================================================
+   Proveedores
+   ===================================================================== */
+function pintarProveedores(){
+  const porProveedor = new Map();
+  data.equipos.forEach(eq => itemsDe(eq).forEach(it => (it.proveedores||[]).forEach(pv => {
+    if(!pv.referencia) return;
+    const nombre = (pv.proveedor||'').trim() || '(sin nombre digitado)';
+    if(!porProveedor.has(nombre)) porProveedor.set(nombre, new Map());
+    const refs = porProveedor.get(nombre);
+    const k = it.id+'|'+pv.id;
+    if(!refs.has(k)) refs.set(k, {referencia:pv.referencia, componente:it.componente, costoUnitario:pv.costoUnitario,
+      preferida: it.proveedorPreferidoId === pv.id, equipos:new Set()});
+    refs.get(k).equipos.add(eq.codigo);
+  })));
+  const nombres = [...porProveedor.keys()].sort((a,b) => a.localeCompare(b));
+  $('#main').innerHTML = `
+    <section class="bloque" style="padding-top:24px">
+      <h1 class="titulo-vista">Proveedores</h1>
+      <p class="hint">Qué le compra a cada proveedor, en cuáles equipos y a qué costo unitario. "Preferido" marca cuál es el que se usa por defecto para ese repuesto en fichas y requisición; los demás quedan aquí guardados por si toca volver a ellos.</p>
+      <div class="tarjetas">
+        <div class="tarjeta"><div class="n">${nombres.length}</div><div class="t">Proveedores con al menos una referencia</div></div>
+      </div>
+      ${nombres.length ? nombres.map(nombre => {
+        const filas = [...porProveedor.get(nombre).values()].sort((a,b) => a.componente.localeCompare(b.componente));
+        return `<h2 style="margin-top:20px">${esc(nombre)}</h2>
+          <table><thead><tr><th>Componente</th><th>Referencia</th><th class="num">Costo unit.</th><th>Equipos</th><th></th></tr></thead>
+          <tbody>${filas.map(f => `<tr>
+            <td>${esc(f.componente)}</td>
+            <td class="mono">${esc(f.referencia)}</td>
+            <td class="num mono">${f.costoUnitario?money(f.costoUnitario):'—'}</td>
+            <td class="mono" style="font-size:13px">${[...f.equipos].map(esc).join(', ')}</td>
+            <td>${f.preferida?'<span class="badge ok">Preferido</span>':''}</td></tr>`).join('')}</tbody></table>`;
+      }).join('') : '<div class="vacio-msg">Todavía no hay proveedores digitados. Agréguelos al editar un filtro o lubricante en Configuración.</div>'}
     </section>`;
 }
 
@@ -1821,7 +1858,7 @@ function modalCambio(eq){
 /* ---------------- Arranque y migración ---------------- */
 function pintarMain(){
   const f = {tablero:pintarTablero, fichas:pintarFicha, planes:pintarPlanes, requisicion:pintarRequisicion,
-             referencias:pintarReferencias, costos:pintarCostos, hist:pintarHistorial, datos:pintarDatos}[vista];
+             referencias:pintarReferencias, proveedores:pintarProveedores, costos:pintarCostos, hist:pintarHistorial, datos:pintarDatos}[vista];
   (f || pintarTablero)();
 }
 /* Convierte una referencia suelta (versión anterior, un texto por ítem) en
