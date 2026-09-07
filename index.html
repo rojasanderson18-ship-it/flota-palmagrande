@@ -467,7 +467,7 @@ function semilla(){
 /* ---------------- Estado ---------------- */
 let data = {planes:[], equipos:[], historial:[], config:{urlBase:'', horizonte:30}, catalogoProveedores:[]};
 let fotos = {};
-let sel = null, planSel = null, vista = 'tablero', filtro = '', vistaProveedores = 'proveedor';
+let sel = null, planSel = null, vista = 'tablero', filtro = '';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1233,9 +1233,14 @@ function pintarReferencias(){
 /* =====================================================================
    Proveedores
    ===================================================================== */
-function usosDeCatalogo(catId){
+/* Para cada ítem que usa esta referencia, el equipo dueño y si ahí es la
+   preferida — el mismo proveedor puede ser preferido en una máquina y no
+   en otra que use el mismo componente. */
+function usosDetalladosDeCatalogo(catId){
   const usos = [];
-  data.equipos.forEach(eq => itemsDe(eq).forEach(it => { if((it.proveedorIds||[]).includes(catId)) usos.push(eq.codigo); }));
+  data.equipos.forEach(eq => itemsDe(eq).forEach(it => {
+    if((it.proveedorIds||[]).includes(catId)) usos.push({eq, preferido: it.proveedorPreferidoId === catId});
+  }));
   return usos;
 }
 function componentesExistentes(){
@@ -1267,9 +1272,14 @@ function objetivosDeComponente(comp){
   }));
   return [...planes, ...propios];
 }
-/* Vista "por proveedor": una tarjeta por empresa, cada referencia con
-   chips de qué equipos la usan (útil para negociar con un proveedor:
-   todo lo que le compramos, junto). */
+/* Una tarjeta por proveedor; DENTRO de la tabla, las referencias se
+   agrupan por la máquina que las usa (encabezado de grupo, igual que ya
+   se hace por proveedor en el selector del editor de un ítem) en vez de
+   amontonar los equipos en una sola celda de texto — así queda claro de
+   un vistazo qué le compra cada equipo a esta empresa. Una referencia
+   que ya aplica a varios equipos aparece repetida bajo cada uno (es la
+   misma pieza, comprada para varias máquinas); lo que todavía no se ha
+   asignado a ningún equipo queda en un grupo aparte al final. */
 function tarjetasPorProveedorHTML(){
   const porProveedor = new Map();
   data.catalogoProveedores.forEach(c => {
@@ -1279,58 +1289,34 @@ function tarjetasPorProveedorHTML(){
   });
   const nombres = [...porProveedor.keys()].sort((a,b) => a.localeCompare(b));
   if(!nombres.length) return '<div class="vacio-msg">Todavía no hay proveedores registrados. Use "+ Agregar proveedor y referencia".</div>';
+  const fila = (f, preferido) => `<tr>
+    <td>${esc(f.componente)}</td>
+    <td class="mono">${esc(f.referencia)}${preferido?' <span class="chip">preferido</span>':''}</td>
+    <td class="num mono">${f.costoUnitario?money(f.costoUnitario):'—'}</td>
+    <td><button class="linkbtn" data-cat-editar="${f.id}">Editar</button></td></tr>`;
+  const cabeceraGrupo = txt => `<tr><td colspan="4" style="background:#F3F6F4;font-weight:600;font-size:13px;padding:6px 10px">${txt}</td></tr>`;
   return nombres.map(nombre => {
     const filas = porProveedor.get(nombre).slice().sort((a,b) => a.componente.localeCompare(b.componente));
-    const equiposDelProveedor = new Set();
-    const usosPorFila = filas.map(f => { const u = usosDeCatalogo(f.id); u.forEach(c => equiposDelProveedor.add(c)); return u; });
+    const porEquipo = new Map();
+    const sinAsignar = [];
+    filas.forEach(f => {
+      const usos = usosDetalladosDeCatalogo(f.id);
+      if(!usos.length){ sinAsignar.push(f); return; }
+      usos.forEach(({eq, preferido}) => {
+        if(!porEquipo.has(eq.id)) porEquipo.set(eq.id, {eq, filas:[]});
+        porEquipo.get(eq.id).filas.push({f, preferido});
+      });
+    });
+    const grupos = [...porEquipo.values()].sort((a,b) => a.eq.codigo.localeCompare(b.eq.codigo, 'es', {numeric:true}));
+    const cuerpo = grupos.map(g => cabeceraGrupo(esc(g.eq.codigo)+' — '+esc(g.eq.marca)+' '+esc(g.eq.modelo)) + g.filas.map(x => fila(x.f, x.preferido)).join('')).join('')
+      + (sinAsignar.length ? cabeceraGrupo('<span style="color:var(--steel);font-weight:400;font-style:italic">Sin asignar a ningún equipo todavía</span>') + sinAsignar.map(f => fila(f, false)).join('') : '');
     return `<div class="prov-card">
       <div class="prov-card-head">
         <h2>${esc(nombre)}</h2>
-        <div class="meta">${filas.length} referencia(s) · ${equiposDelProveedor.size} equipo(s)</div>
+        <div class="meta">${filas.length} referencia(s) · ${grupos.length} equipo(s)</div>
       </div>
-      <div class="tabla-envoltorio"><table><thead><tr><th>Componente</th><th>Referencia</th><th class="num">Costo unit.</th><th>Equipos</th><th></th></tr></thead>
-      <tbody>${filas.map((f,i) => {
-        const usos = usosPorFila[i];
-        return `<tr>
-          <td>${esc(f.componente)}</td>
-          <td class="mono">${esc(f.referencia)}</td>
-          <td class="num mono">${f.costoUnitario?money(f.costoUnitario):'—'}</td>
-          <td>${usos.length ? usos.map(c=>`<span class="chip">${esc(c)}</span>`).join('') : '<span class="chip vacio">ninguno todavía</span>'}</td>
-          <td><button class="linkbtn" data-cat-editar="${f.id}">Editar</button></td></tr>`;
-      }).join('')}</tbody></table></div>
-    </div>`;
-  }).join('');
-}
-/* Vista "por máquina": una tarjeta por equipo, con todo lo que tiene
-   configurado (de cualquier proveedor) — útil para ver de un vistazo
-   qué le compramos a UN equipo en particular, en vez de tener que
-   buscarlo repartido entre varias tarjetas de proveedor. Solo entran los
-   equipos que ya tienen algo asignado; los que no, se ven en Fichas con
-   el badge "sin referencia". */
-function tarjetasPorEquipoHTML(){
-  const equipos = data.equipos.slice().sort((a,b) => a.codigo.localeCompare(b.codigo, 'es', {numeric:true}));
-  const conRefs = equipos.map(eq => {
-    const filas = [];
-    itemsDe(eq).forEach(it => proveedoresDe(it).forEach(p => {
-      filas.push({componente:it.componente, proveedor:(p.proveedor||'').trim()||'(sin nombre)', referencia:p.referencia, costo:p.costoUnitario, preferido:p.id===it.proveedorPreferidoId, catId:p.id});
-    }));
-    return {eq, filas};
-  }).filter(x => x.filas.length);
-  if(!conRefs.length) return '<div class="vacio-msg">Ningún equipo tiene todavía un proveedor asignado.</div>';
-  return conRefs.map(({eq, filas}) => {
-    const ordenadas = filas.slice().sort((a,b) => a.componente.localeCompare(b.componente));
-    return `<div class="prov-card">
-      <div class="prov-card-head">
-        <h2>${esc(eq.codigo)} — ${esc(eq.marca)} ${esc(eq.modelo)}</h2>
-        <div class="meta">${filas.length} referencia(s)</div>
-      </div>
-      <div class="tabla-envoltorio"><table><thead><tr><th>Componente</th><th>Proveedor</th><th class="num">Costo unit.</th><th>Referencia</th><th></th></tr></thead>
-      <tbody>${ordenadas.map(f => `<tr>
-        <td>${esc(f.componente)}</td>
-        <td>${esc(f.proveedor)}${f.preferido?' <span class="chip">preferido</span>':''}</td>
-        <td class="num mono">${f.costo?money(f.costo):'—'}</td>
-        <td class="mono">${esc(f.referencia)}</td>
-        <td><button class="linkbtn" data-cat-editar="${f.catId}">Editar</button></td></tr>`).join('')}</tbody></table></div>
+      <div class="tabla-envoltorio"><table><thead><tr><th>Componente</th><th>Referencia</th><th class="num">Costo unit.</th><th></th></tr></thead>
+      <tbody>${cuerpo}</tbody></table></div>
     </div>`;
   }).join('');
 }
@@ -1350,16 +1336,10 @@ function pintarProveedores(){
         <div class="tarjeta"><div class="n">${nombresDistintos}</div><div class="t">Proveedores distintos</div></div>
         <div class="tarjeta"><div class="n">${equiposConProveedor}</div><div class="t">Equipos con proveedor asignado</div></div>
       </div>
-      <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
-        <button class="btn ${vistaProveedores==='proveedor'?'':'sec'}" id="vp-proveedor">Por proveedor</button>
-        <button class="btn ${vistaProveedores==='equipo'?'':'sec'}" id="vp-equipo">Por máquina</button>
-      </div>
-      ${vistaProveedores==='equipo' ? tarjetasPorEquipoHTML() : tarjetasPorProveedorHTML()}
+      ${tarjetasPorProveedorHTML()}
     </section>`;
   $('#cat-nuevo').onclick = () => modalCatalogoProveedor(null);
   $('#cat-pdf').onclick = () => modalCargarCotizacion();
-  $('#vp-proveedor').onclick = () => { vistaProveedores = 'proveedor'; pintarProveedores(); };
-  $('#vp-equipo').onclick = () => { vistaProveedores = 'equipo'; pintarProveedores(); };
   $('#main').querySelectorAll('[data-cat-editar]').forEach(b => b.onclick = () =>
     modalCatalogoProveedor(data.catalogoProveedores.find(c => c.id === b.dataset.catEditar)));
 }
