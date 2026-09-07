@@ -973,7 +973,10 @@ function agruparRequisicion(dias){
   const map = new Map();
   pendientes(dias).forEach(({eq,it,p}) => {
     const clave = (refTexto(it) || 'SIN-REF · '+it.componente).toUpperCase();
-    if(!map.has(clave)) map.set(clave, {referencia:refTexto(it), componente:it.componente, unidad:it.unidad, cantidad:0, equipos:[], dias:p.dias, fecha:p.fecha});
+    if(!map.has(clave)){
+      const pref = refPreferida(it);
+      map.set(clave, {referencia:refTexto(it), proveedor: pref ? pref.proveedor : '', componente:it.componente, unidad:it.unidad, cantidad:0, equipos:[], dias:p.dias, fecha:p.fecha});
+    }
     const g = map.get(clave);
     g.cantidad += Number(it.cantidad) || 0;
     g.equipos.push(eq.codigo);
@@ -1002,28 +1005,29 @@ function pintarRequisicion(){
         <button class="btn sec" id="req-csv">Descargar CSV</button>
       </div>
       ${filas.length ? `<table><thead><tr>
-          <th>Referencia</th><th>Componente</th><th class="num">Cantidad</th><th>Equipos</th><th class="num">Se necesita</th>
+          <th>Referencia</th><th>Proveedor</th><th>Componente</th><th class="num">Cantidad</th><th>Equipos</th><th class="num">Se necesita</th>
         </tr></thead><tbody>${filas.map(f => `
           <tr><td class="mono ${f.referencia?'':'ref vacio'}">${f.referencia?esc(f.referencia):'falta digitar'}</td>
+            <td>${f.proveedor?esc(f.proveedor):'—'}</td>
             <td>${esc(f.componente)}</td>
             <td class="num mono">${f.cantidad ? nfmt(f.cantidad)+' '+esc(f.unidad) : '—'}</td>
             <td class="mono" style="font-size:13px">${f.equipos.map(esc).join(', ')}</td>
             <td class="num">${f.fecha ? fechaCorta(f.fecha)+' · '+textoDias(f.dias) : '—'}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><td colspan="2">${filas.length} referencia(s)</td>
+        <tfoot><tr><td colspan="3">${filas.length} referencia(s)</td>
           <td class="num mono">${nfmt(filas.reduce((s,f)=>s+f.cantidad,0))}</td><td colspan="2"></td></tr></tfoot></table>
         <p class="hint" style="margin-top:12px">Las filas sin referencia salen igual, para que no se le escape ese repuesto; complétela en la hoja de configuración del modelo.${excluidos.length ? ' No se pidió nada para '+excluidos.map(e=>esc(e.codigo)).join(', ')+', que no están operando.' : ''}</p>`
       : `<div class="vacio-msg">No hay nada por pedir en ese plazo.${excluidos.length ? '<br>'+excluidos.map(e=>esc(e.codigo)).join(', ')+' no entran porque no están operando.' : ''}</div>`}
     </section>`;
   $('#hz').onchange = async e => { data.config.horizonte = Number(e.target.value); await persistir(); pintarRequisicion(); };
   const texto = () => 'REQUISICION - Filtros y lubricantes | Palma Grande | '+hoy()+'\nProximos '+dias+' dias\n\n' +
-    filas.map(f => (f.referencia||'(sin referencia)')+' | '+f.componente+' | '+(f.cantidad||'?')+' '+f.unidad+' | '+f.equipos.join(', ')).join('\n');
+    filas.map(f => (f.referencia||'(sin referencia)')+(f.proveedor?' ('+f.proveedor+')':'')+' | '+f.componente+' | '+(f.cantidad||'?')+' '+f.unidad+' | '+f.equipos.join(', ')).join('\n');
   $('#req-copiar').onclick = async () => {
     try{ await navigator.clipboard.writeText(texto()); toast('Requisición copiada'); }
     catch(e){ toast('No se pudo copiar. Use la descarga en CSV.'); }
   };
   $('#req-csv').onclick = () => {
-    const csv = 'Referencia;Componente;Cantidad;Unidad;Equipos;Fecha estimada\n' +
-      filas.map(f => [f.referencia||'', f.componente, f.cantidad||'', f.unidad, f.equipos.join(' '), f.fecha||''].join(';')).join('\n');
+    const csv = 'Referencia;Proveedor;Componente;Cantidad;Unidad;Equipos;Fecha estimada\n' +
+      filas.map(f => [f.referencia||'', f.proveedor||'', f.componente, f.cantidad||'', f.unidad, f.equipos.join(' '), f.fecha||''].join(';')).join('\n');
     descargar(new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'}), 'requisicion-'+hoy()+'.csv');
     toast('CSV descargado');
   };
