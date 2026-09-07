@@ -498,6 +498,18 @@ const lecturaActualItem = (eq, it) => it.usaAux ? (eq.aux ? eq.aux.lectura : nul
 const medidorTxt = m => m === 'km' ? 'kilometraje' : 'horómetro';
 const segunPropio = m => m === 'km' ? 'su propio kilometraje' : 'sus propias horas';
 const badgeMedidorPropio = m => '<span class="badge propio">'+medidorTxt(m)+' propio</span>';
+/* Cuando el equipo montado ni siquiera tiene un contador propio que se
+   pueda leer (el caso real: un Multilift sin horómetro), no hay forma de
+   medir "uso" en absoluto — lo único confiable es el calendario. it.porDias
+   marca esos ítems: se cambian cada N días desde la última vez,
+   calculado solo con la fecha (sin pedir ninguna lectura ni depender de
+   un uso diario estimado, así que la fecha del próximo cambio siempre se
+   puede calcular con certeza, a diferencia del contador propio). */
+function proximaFechaPorDias(ultFecha, intervaloDias){
+  const d = new Date(ultFecha+'T12:00:00');
+  d.setDate(d.getDate() + Number(intervaloDias));
+  return isoLocal(d);
+}
 
 function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(t._t); t._t=setTimeout(()=>t.hidden=true,4200); }
 let sinAlmacenamiento = false;
@@ -629,7 +641,16 @@ function elegirFoto(eq){
 
 /* ---------------- Cálculos ---------------- */
 function estadoItem(eq, it){
-  if(!it.intervalo || it.ultLectura == null) return {clave:'na', txt:'Sin registrar', restante:null, proximo:null};
+  if(!it.intervalo) return {clave:'na', txt:'Sin registrar', restante:null, proximo:null};
+  if(it.porDias){
+    if(!it.ultFecha) return {clave:'na', txt:'Sin registrar', restante:null, proximo:null};
+    const proximo = proximaFechaPorDias(it.ultFecha, it.intervalo);
+    const restante = Math.round((new Date(proximo+'T12:00:00') - new Date(hoy()+'T12:00:00')) / 86400000);
+    if(restante <= 0) return {clave:'venc', txt:'Vencido', restante, proximo};
+    if(restante <= it.intervalo*0.15) return {clave:'prox', txt:'Próximo', restante, proximo};
+    return {clave:'ok', txt:'Al día', restante, proximo};
+  }
+  if(it.ultLectura == null) return {clave:'na', txt:'Sin registrar', restante:null, proximo:null};
   const actual = lecturaActualItem(eq, it);
   if(it.usaAux && actual == null) return {clave:'na', txt:'Falta el '+medidorTxt(medidorOpuesto(eq.medidor))+' propio', restante:null, proximo:null};
   const proximo = Number(it.ultLectura) + Number(it.intervalo);
@@ -662,6 +683,12 @@ function usoDiario(eq){
 function proyeccion(eq, it){
   const e = estadoItem(eq,it);
   if(e.restante == null) return Object.assign({}, e, {dias:null, fecha:null});
+  /* Por tiempo calendario la fecha del próximo cambio se sabe con
+     certeza (última fecha + N días) sin necesitar ningún estimado de
+     uso diario ni depender de si el equipo está operando o parado — al
+     contrario del medidor propio (usaAux), que si no tiene un uso por
+     día digitado se queda sin poder proyectar fecha. */
+  if(it.porDias) return Object.assign({}, e, {dias:e.restante, fecha:e.proximo});
   if(!trabajando(eq)) return Object.assign({}, e, {dias:null, fecha:null, parado:true});
   /* El uso diario medido (usoDiario) viene de la bitácora del medidor
      principal del equipo; para un ítem con contador aparte (usaAux) no
@@ -881,10 +908,10 @@ function pintarPlanDetalle(plan){
     return `<div class="tabla-envoltorio"><table><thead><tr>
         <th>Componente</th><th>Referencia</th><th class="num">Cantidad</th><th class="num">Cambio cada</th><th></th>
       </tr></thead><tbody>${its.map(i => `
-        <tr><td>${esc(i.componente)}${i.usaAux?' '+badgeMedidorPropio(medidorOpuesto(plan.medidor)):''}</td>
+        <tr><td>${esc(i.componente)}${i.porDias?' <span class="badge propio">por tiempo</span>':(i.usaAux?' '+badgeMedidorPropio(medidorOpuesto(plan.medidor)):'')}</td>
           <td class="ref mono ${tieneRef(i)?'':'vacio'}">${tieneRef(i)?esc(refTexto(i))+(i.proveedorIds.length>1?' <span style="color:var(--steel)">+'+(i.proveedorIds.length-1)+' más</span>':''):'falta digitar'}</td>
           <td class="num">${i.cantidad ? esc(i.cantidad)+' '+esc(i.unidad) : '—'}</td>
-          <td class="num mono">${i.intervalo ? nfmt(i.intervalo)+' '+uCorta(medidorItem(plan.medidor, i)) : '—'}</td>
+          <td class="num mono">${i.intervalo ? nfmt(i.intervalo)+' '+(i.porDias?'días':uCorta(medidorItem(plan.medidor, i))) : '—'}</td>
           <td><button class="linkbtn" data-item="${i.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div>`;
   };
@@ -1069,7 +1096,8 @@ function modalItemPlan(plan, it){
   const nuevo = !it;
   const um = plan.medidor === 'km' ? 'km' : 'h';
   const eqs = equiposDePlan(plan.id);
-  it = it || {id:nid(), categoria:'filtro', componente:'', proveedorIds:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null, usaAux:false};
+  it = it || {id:nid(), categoria:'filtro', componente:'', proveedorIds:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null, usaAux:false, porDias:false};
+  const modoInicial = it.porDias ? 'dias' : (it.usaAux ? 'aux' : 'equipo');
   abrir(`<h3>${nuevo?'Agregar elemento':'Editar elemento'} — ${esc(plan.nombre)}</h3>
     <div class="body">
       ${eqs.length>1 ? `<div class="aviso">Este cambio aplica a los ${eqs.length} equipos con esta hoja: ${eqs.map(e=>esc(e.codigo)).join(', ')}.</div>` : ''}
@@ -1084,29 +1112,41 @@ function modalItemPlan(plan, it){
         <label class="f">Unidad<select id="uni">${['und','gal','L','kg'].map(x=>`<option ${it.unidad===x?'selected':''}>${x}</option>`).join('')}</select></label>
         <label class="f">Cambio cada (<span id="lbl-um">${um}</span>)<input type="number" id="int" value="${it.intervalo??''}"></label>
       </div>
-      <label class="check ${it.usaAux?'on':''}" id="fila-aux" style="margin-bottom:12px">
-        <input type="checkbox" id="usaAux" ${it.usaAux?'checked':''}>
-        <span><span class="c-nom">Tiene su propio ${medidorTxt(medidorOpuesto(plan.medidor))}</span><br>
-        <span class="c-sub">Por ejemplo, un equipo hidráulico montado (Multilift, grúa) que se cambia según ${segunPropio(medidorOpuesto(plan.medidor))} y no según ${um==='km'?'el kilometraje':'las horas'} de esta hoja. Si ya hay un último cambio registrado por equipo, actualícelo con la nueva lectura.</span></span>
-      </label>
+      <label class="f">¿Cómo se controla este ítem?<select id="modo">
+        <option value="equipo" ${modoInicial==='equipo'?'selected':''}>Con el medidor de esta hoja (${um})</option>
+        <option value="aux" ${modoInicial==='aux'?'selected':''}>Con su propio contador de ${medidorOpuesto(plan.medidor)}</option>
+        <option value="dias" ${modoInicial==='dias'?'selected':''}>Por tiempo calendario (sin medidor)</option>
+      </select></label>
+      <div class="check" id="fila-modo" style="margin-bottom:12px">
+        <span id="modo-detalle" style="font-size:13px;color:var(--ink-soft)"></span>
+      </div>
       ${htmlProveedores(it, 'plan')}
     </div>
     <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar</button>'}
       <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
     () => {
       const leerProv = wireProveedores('plan', it, () => 'plan:'+plan.id);
-      $('#usaAux').onchange = () => {
-        $('#fila-aux').classList.toggle('on', $('#usaAux').checked);
-        $('#lbl-um').textContent = uCorta($('#usaAux').checked ? medidorOpuesto(plan.medidor) : plan.medidor);
+      const actualizarModo = () => {
+        const modo = $('#modo').value;
+        $('#fila-modo').classList.toggle('on', modo!=='equipo');
+        $('#lbl-um').textContent = modo==='dias' ? 'días' : uCorta(modo==='aux' ? medidorOpuesto(plan.medidor) : plan.medidor);
+        $('#modo-detalle').innerHTML = modo==='aux'
+          ? `Por ejemplo, un equipo hidráulico montado (Multilift, grúa) que se cambia según ${segunPropio(medidorOpuesto(plan.medidor))} y no según ${um==='km'?'el kilometraje':'las horas'} de esta hoja. Si ya hay un último cambio registrado por equipo, actualícelo con la nueva lectura.`
+          : modo==='dias'
+          ? `Para equipos sin ningún medidor que se pueda leer (ej. un Multilift sin horómetro): el cambio se calcula solo con la fecha del último cambio más los días de arriba, sin necesitar ninguna lectura.`
+          : '';
       };
+      actualizarModo();
+      $('#modo').addEventListener('change', actualizarModo);
       $('#ok').onclick = async () => {
         const comp = $('#comp').value.trim();
         if(!comp) return toast('Escriba el nombre del componente.');
         const {proveedorIds, proveedorPreferidoId} = leerProv();
+        const modo = $('#modo').value;
         Object.assign(it, {categoria:$('#cat').value, componente:comp,
           cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
           intervalo:$('#int').value===''?null:Number($('#int').value), proveedorIds, proveedorPreferidoId,
-          usaAux:$('#usaAux').checked});
+          usaAux:modo==='aux', porDias:modo==='dias'});
         if(nuevo) plan.items.push(it);
         await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Configuración guardada');
       };
@@ -1199,6 +1239,13 @@ function pintarReferencias(){
     if(!map.has(k)) map.set(k, {referencia:ref.trim(), componentes:new Set(), unidad:it.unidad, equipos:[], anual:0});
     const g = map.get(k);
     g.componentes.add(it.componente); g.equipos.push(eq.codigo);
+    if(it.porDias){
+      /* Por tiempo calendario el consumo anual no depende de ningún uso
+         estimado: se cambia cada N días siempre, así que es un cálculo
+         exacto en vez de una proyección. */
+      if(it.intervalo && it.cantidad) g.anual += (365/it.intervalo) * Number(it.cantidad);
+      return;
+    }
     /* Un ítem con contador propio (usaAux) no comparte el uso diario del
        medidor principal del equipo — usarlo mezclaría horas con km. Si no
        hay un uso por día digitado para ese contador aparte, se deja fuera
@@ -1813,13 +1860,14 @@ function tablaItems(eq, categoria){
       <th class="num">Último cambio</th><th class="num">Faltan</th><th class="num">Fecha estimada</th><th>Estado</th><th></th>
     </tr></thead><tbody>` + items.map(it => {
       const p = proyeccion(eq,it);
-      const um = uItem(eq, it);
+      const um = it.porDias ? 'días' : uItem(eq, it);
+      const badgeModo = it.porDias ? ' <span class="badge propio">por tiempo</span>' : (it.usaAux ? ' '+badgeMedidorPropio(medidorOpuesto(eq.medidor)) : '');
       return `<tr>
-        <td>${esc(it.componente)}${it.origen==='propio'?' <span class="badge propio">solo este equipo</span>':''}${it.usaAux?' '+badgeMedidorPropio(medidorOpuesto(eq.medidor)):''}</td>
+        <td>${esc(it.componente)}${it.origen==='propio'?' <span class="badge propio">solo este equipo</span>':''}${badgeModo}</td>
         <td class="ref mono ${tieneRef(it)?'':'vacio'}">${tieneRef(it)?esc(refTexto(it))+(it.proveedorIds.length>1?' <span style="color:var(--steel)">+'+(it.proveedorIds.length-1)+'</span>':''):'sin referencia'}</td>
         <td class="num">${it.cantidad ? esc(it.cantidad)+' '+esc(it.unidad) : '—'}</td>
         <td class="num mono">${it.intervalo ? nfmt(it.intervalo)+' '+um : '—'}</td>
-        <td class="num mono">${it.ultLectura!=null ? nfmt(it.ultLectura)+' '+um : '—'}</td>
+        <td class="num mono">${it.porDias ? (it.ultFecha?fechaCorta(it.ultFecha):'—') : (it.ultLectura!=null ? nfmt(it.ultLectura)+' '+um : '—')}</td>
         <td class="num mono">${p.restante!=null ? (p.restante>0 ? nfmt(p.restante)+' '+um : nfmt(Math.abs(p.restante))+' '+um+' pasados') : '—'}</td>
         <td class="num">${p.fecha ? fechaCorta(p.fecha) : '—'}</td>
         <td><span class="badge ${p.clave}">${p.txt}</span></td>
@@ -1955,7 +2003,8 @@ function modalItemEquipo(eq, it){
   const plan = planPorId(eq.planId);
   const eqs = plan ? equiposDePlan(plan.id) : [];
   const esPlan = it ? it.origen === 'plan' : true;
-  const base = it || {id:nid(), categoria:'filtro', componente:'', proveedorIds:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null, ultLectura:null, ultFecha:''};
+  const base = it || {id:nid(), categoria:'filtro', componente:'', proveedorIds:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null, ultLectura:null, ultFecha:'', usaAux:false, porDias:false};
+  const modoInicial = base.porDias ? 'dias' : (base.usaAux ? 'aux' : 'equipo');
   abrir(`<h3>${nuevo?'Agregar filtro o aceite':'Editar'} — ${esc(eq.codigo)}</h3>
     <div class="body">
       ${nuevo ? `<label class="f">¿A quién aplica?<select id="alcance">
@@ -1973,15 +2022,18 @@ function modalItemEquipo(eq, it){
         <label class="f">Unidad<select id="uni">${['und','gal','L','kg'].map(x=>`<option ${base.unidad===x?'selected':''}>${x}</option>`).join('')}</select></label>
         <label class="f">Cambio cada (<span id="lbl-um1">${uItem(eq,base)}</span>)<input type="number" id="int" value="${base.intervalo??''}"></label>
       </div>
-      <label class="check ${base.usaAux?'on':''}" id="fila-aux" style="margin-bottom:12px">
-        <input type="checkbox" id="usaAux" ${base.usaAux?'checked':''}>
-        <span><span class="c-nom">Tiene su propio ${medidorTxt(medidorOpuesto(eq.medidor))}</span><br>
-        <span class="c-sub">Por ejemplo, un equipo hidráulico montado (Multilift, grúa) que se cambia según ${segunPropio(medidorOpuesto(eq.medidor))} y no según ${u(eq)==='km'?'el kilometraje':'las horas'} de este equipo.</span></span>
-      </label>
+      <label class="f">¿Cómo se controla este ítem?<select id="modo">
+        <option value="equipo" ${modoInicial==='equipo'?'selected':''}>Con el medidor de este equipo (${uItem(eq,base)})</option>
+        <option value="aux" ${modoInicial==='aux'?'selected':''}>Con su propio contador de ${medidorOpuesto(eq.medidor)}</option>
+        <option value="dias" ${modoInicial==='dias'?'selected':''}>Por tiempo calendario (sin medidor)</option>
+      </select></label>
+      <div class="check" id="fila-modo" style="margin-bottom:12px">
+        <span id="modo-detalle" style="font-size:13px;color:var(--ink-soft)"></span>
+      </div>
       ${htmlProveedores(base, 'eq')}
       <div class="sep">Último cambio en ${esc(eq.codigo)}<small>Este dato es propio del equipo y no afecta a los demás.</small></div>
       <div class="fila">
-        <label class="f">Se hizo a los (<span id="lbl-um2">${uItem(eq,base)}</span>)<input type="number" id="ult" value="${base.ultLectura??''}"></label>
+        <label class="f" id="fila-ult-lectura">Se hizo a los (<span id="lbl-um2">${uItem(eq,base)}</span>)<input type="number" id="ult" value="${base.ultLectura??''}"></label>
         <label class="f">Fecha<input type="date" id="ultf" value="${base.ultFecha||''}"></label>
       </div>
     </div>
@@ -1992,19 +2044,29 @@ function modalItemEquipo(eq, it){
         if(nuevo) return $('#alcance').value === 'plan' && plan ? 'plan:'+plan.id : 'equipo:'+eq.id;
         return esPlan && plan ? 'plan:'+plan.id : 'equipo:'+eq.id;
       });
-      $('#usaAux').onchange = () => {
-        $('#fila-aux').classList.toggle('on', $('#usaAux').checked);
-        const um = uCorta($('#usaAux').checked ? medidorOpuesto(eq.medidor) : eq.medidor);
+      const actualizarModo = () => {
+        const modo = $('#modo').value;
+        $('#fila-modo').classList.toggle('on', modo!=='equipo');
+        const um = modo==='dias' ? 'días' : uCorta(modo==='aux' ? medidorOpuesto(eq.medidor) : eq.medidor);
         $('#lbl-um1').textContent = um; $('#lbl-um2').textContent = um;
+        $('#fila-ult-lectura').hidden = modo==='dias';
+        $('#modo-detalle').innerHTML = modo==='aux'
+          ? `Por ejemplo, un equipo hidráulico montado (Multilift, grúa) que se cambia según ${segunPropio(medidorOpuesto(eq.medidor))} y no según ${u(eq)==='km'?'el kilometraje':'las horas'} de este equipo.`
+          : modo==='dias'
+          ? `Para equipos sin ningún medidor que se pueda leer (ej. un Multilift sin horómetro): el cambio se calcula solo con la fecha del último cambio más los días de arriba, sin necesitar ninguna lectura.`
+          : '';
       };
+      actualizarModo();
+      $('#modo').addEventListener('change', actualizarModo);
       $('#ok').onclick = async () => {
         const comp = $('#comp').value.trim();
         if(!comp) return toast('Escriba el nombre del componente.');
         const {proveedorIds, proveedorPreferidoId} = leerProv();
+        const modo = $('#modo').value;
         const def = Object.assign({categoria:$('#cat').value, componente:comp,
           cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
           intervalo:$('#int').value===''?null:Number($('#int').value), proveedorIds, proveedorPreferidoId,
-          usaAux:$('#usaAux').checked});
+          usaAux:modo==='aux', porDias:modo==='dias'});
         let id = base.id;
         if(nuevo){
           const alPlan = $('#alcance').value === 'plan' && plan;
@@ -2016,9 +2078,15 @@ function modalItemEquipo(eq, it){
         } else {
           Object.assign((eq.propios||[]).find(x => x.id === id), def);
         }
-        const ul = $('#ult').value === '' ? null : Number($('#ult').value);
-        if(ul == null){ if(eq.estado) delete eq.estado[id]; }
-        else fijarUltimo(eq, id, ul, $('#ultf').value || hoy());
+        if(modo === 'dias'){
+          const f = $('#ultf').value;
+          if(!f){ if(eq.estado) delete eq.estado[id]; }
+          else fijarUltimo(eq, id, null, f);
+        } else {
+          const ul = $('#ult').value === '' ? null : Number($('#ult').value);
+          if(ul == null){ if(eq.estado) delete eq.estado[id]; }
+          else fijarUltimo(eq, id, ul, $('#ultf').value || hoy());
+        }
         await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Guardado');
       };
       const d = $('#del');
@@ -2067,13 +2135,14 @@ function tablaPrint(eq, categoria, titulo){
       <th>Componente</th><th>Referencia</th><th>Cantidad</th><th>Cambio cada</th><th>Último cambio</th><th>Próximo a los</th>
     </tr></thead><tbody>${items.map(it => {
       const p = proyeccion(eq,it);
-      const um = uItem(eq, it);
-      return `<tr><td>${esc(it.componente)}${it.usaAux?' ('+medidorTxt(medidorOpuesto(eq.medidor))+' propio)':''}</td>
+      const um = it.porDias ? 'días' : uItem(eq, it);
+      const modoTxt = it.porDias ? ' (por tiempo)' : (it.usaAux ? ' ('+medidorTxt(medidorOpuesto(eq.medidor))+' propio)' : '');
+      return `<tr><td>${esc(it.componente)}${modoTxt}</td>
         <td><strong>${tieneRef(it)?esc(refTexto(it)):'—'}</strong></td>
         <td>${it.cantidad?esc(it.cantidad)+' '+esc(it.unidad):'—'}</td>
         <td>${it.intervalo?nfmt(it.intervalo)+' '+um:'—'}</td>
-        <td>${it.ultLectura!=null?nfmt(it.ultLectura)+' '+um+(it.ultFecha?' · '+it.ultFecha:''):'—'}</td>
-        <td>${p.proximo!=null?nfmt(p.proximo)+' '+um+(p.fecha?' · '+fechaCorta(p.fecha):''):'—'}</td></tr>`;
+        <td>${it.porDias ? (it.ultFecha?fechaCorta(it.ultFecha):'—') : (it.ultLectura!=null?nfmt(it.ultLectura)+' '+um+(it.ultFecha?' · '+it.ultFecha:''):'—')}</td>
+        <td>${it.porDias ? (p.fecha?fechaCorta(p.fecha):'—') : (p.proximo!=null?nfmt(p.proximo)+' '+um+(p.fecha?' · '+fechaCorta(p.fecha):''):'—')}</td></tr>`;
     }).join('')}</tbody></table>`;
 }
 function imprimirComprobante(h){
