@@ -200,12 +200,23 @@
        de parte) puede empujar la tabla más allá del margen impreso en vez
        de ajustarse — se veía cortada por la derecha. */
     #print-area table{border:1px solid #999;font-size:11px;width:100%;border-collapse:collapse;table-layout:fixed}
-    #print-area th{background:#EEE;padding:4px 6px;border-bottom:1px solid #999;text-align:left}
+    /* El th normal de pantalla (fuera de @media print) trae
+       white-space:nowrap para las tablas interactivas; sin anularlo aquí,
+       una etiqueta como "Estado del equipo" no puede partirse en dos
+       líneas y se desborda encima de la celda vecina en vez de ajustarse
+       al ancho fijo de su columna. */
+    #print-area th{background:#EEE;padding:4px 6px;border-bottom:1px solid #999;text-align:left;white-space:normal}
     #print-area td{padding:4px 6px;border-bottom:1px solid #DDD}
-    #print-area td,#print-area th{word-break:break-word;overflow-wrap:anywhere}
-    .p-items th:nth-child(1),.p-items td:nth-child(1){width:19%}
-    .p-items th:nth-child(2),.p-items td:nth-child(2){width:29%}
-    .p-items th:nth-child(3),.p-items td:nth-child(3){width:9%}
+    /* Los encabezados (th) son textos cortos que este archivo controla:
+       basta con permitirles partirse en los espacios (el wrap normal del
+       navegador) para que quepan en dos líneas sin romper una palabra a
+       la mitad, como pasaba con "Cantidad" → "Cantida"/"d". El contenido
+       de datos (td) sí puede traer un código de referencia largo sin
+       ningún espacio, así que ese necesita poder partirse donde sea. */
+    #print-area td{word-break:break-word;overflow-wrap:anywhere}
+    .p-items th:nth-child(1),.p-items td:nth-child(1){width:17%}
+    .p-items th:nth-child(2),.p-items td:nth-child(2){width:27%}
+    .p-items th:nth-child(3),.p-items td:nth-child(3){width:11%}
     .p-items th:nth-child(4),.p-items td:nth-child(4){width:12%}
     .p-items th:nth-child(5),.p-items td:nth-child(5){width:15%}
     .p-items th:nth-child(6),.p-items td:nth-child(6){width:16%}
