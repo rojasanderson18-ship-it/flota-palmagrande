@@ -2188,10 +2188,10 @@ function imprimirComprobante(h){
               : '<h4>Observaciones</h4><div style="border:1px solid #DDD;height:34px"></div>'}
 
       <div class="p-firma">
-        <div>${esc(h.responsable||'—')}<br><span class="p-firma-rol">Mecánico que ejecutó</span></div>
-        <div>Anderson Rojas<br><span class="p-firma-rol">Superintendente</span></div>
-        <div>Fernando Sánchez<br><span class="p-firma-rol">Director técnico</span></div>
-        <div>&nbsp;<br><span class="p-firma-rol">Fecha de recibido</span></div>
+        <div>${esc(h.responsable||'—')}<br><span class="p-firma-rol">Mecánico ejecuta</span></div>
+        <div>${esc(eq.responsable||'—')}<br><span class="p-firma-rol">Tractorista recibe</span></div>
+        <div>Fernando Sánchez<br><span class="p-firma-rol">Director técnico valida</span></div>
+        <div>Anderson Rojas<br><span class="p-firma-rol">Superintendente aprueba</span></div>
       </div>
 
       <div class="p-pie">
