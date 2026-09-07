@@ -1368,12 +1368,6 @@ function usosDetalladosDeCatalogo(catId){
   }));
   return usos;
 }
-function componentesExistentes(){
-  const set = new Set();
-  data.planes.forEach(p => p.items.forEach(i => set.add(i.componente)));
-  data.equipos.forEach(e => (e.propios||[]).forEach(i => set.add(i.componente)));
-  return [...set].sort();
-}
 /* Los componentes que de verdad aplican a UN equipo concreto: los de su
    hoja de configuración más los propios de él. Sirve para que, al
    registrar un proveedor desde un equipo específico, el desplegable de
