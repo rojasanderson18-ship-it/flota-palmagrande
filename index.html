@@ -61,7 +61,7 @@
   .dot.ok{background:var(--green)}.dot.prox{background:var(--amber)}.dot.venc{background:var(--red)}.dot.na{background:var(--line)}
   .addeq{width:100%;margin-top:12px;background:transparent;border:1px dashed var(--steel);color:var(--ink-soft);padding:8px;border-radius:var(--radius)}
 
-  main{padding:0 0 60px}
+  main{padding:0 0 60px;min-width:0}
   .backbtn{display:none;align-items:center;gap:6px;background:none;border:none;color:var(--green);padding:12px 20px 0;font-weight:600}
   .fichahead{background:var(--ink);color:#EDF0EE;padding:18px 22px;display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end}
   .fichafoto{width:168px;height:118px;border-radius:2px;overflow:hidden;background:#22302A;display:flex;align-items:center;justify-content:center;flex:none;border:none;padding:0;color:#EDF0EE}
@@ -78,6 +78,10 @@
   .lectura button{background:transparent;border:1px solid #3A4A42;color:#B9C9C1;border-radius:var(--radius);padding:3px 9px;margin-top:6px;font-size:12px}
 
   .barra{display:flex;gap:8px;flex-wrap:wrap;padding:14px 22px;border-bottom:1px solid var(--line);background:#E9ECEA;align-items:center}
+  @media(max-width:700px){
+    .barra{flex-wrap:nowrap;overflow-x:auto;padding:10px 14px;-webkit-overflow-scrolling:touch}
+    .barra .btn,.barra .btn.sec,.barra .btn.danger{flex:none;white-space:nowrap;padding:8px 12px;font-size:13px}
+  }
   .btn{background:var(--green);color:#fff;border:1px solid var(--green);padding:8px 14px;border-radius:var(--radius);font-weight:600}
   .btn.sec{background:var(--card);color:var(--ink);border-color:var(--line);font-weight:500}
   .btn.sec:hover{border-color:var(--steel)}
@@ -87,7 +91,15 @@
   .bloque h2{font-size:15px;margin:0 0 4px;font-weight:600}
   .bloque p.hint{margin:0 0 12px;color:var(--steel);font-size:13px;max-width:74ch}
   .titulo-vista{font-size:22px;font-weight:700;margin:0 0 2px}
+  @media(max-width:700px){
+    section.bloque{padding:14px 12px 0}
+    .titulo-vista{font-size:19px}
+  }
 
+  /* En pantallas angostas, las tablas se deslizan de lado en vez de aplastar
+     el texto de cada celda en varias líneas: se ve una fila por dato, en
+     vez de una torre ilegible. */
+  .tabla-envoltorio{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius)}
   table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
   th{font-size:12px;text-align:left;color:var(--ink-soft);font-weight:600;padding:9px 10px;background:#E9ECEA;border-bottom:1px solid var(--line);white-space:nowrap}
   td{padding:9px 10px;border-bottom:1px solid #E9ECEA;vertical-align:middle;font-size:14px}
@@ -98,6 +110,11 @@
   tfoot td{background:#E9ECEA;font-weight:600;border-top:1px solid var(--line)}
   .ref{font-size:13px}
   .ref.vacio{color:var(--steel);font-style:italic}
+  @media(max-width:700px){
+    .tabla-envoltorio{margin:0 -12px;padding:0 12px;border-radius:0}
+    .tabla-envoltorio table{border-radius:var(--radius);min-width:640px}
+    td,.ref{white-space:nowrap}
+  }
   .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap}
   .badge.ok{background:var(--green-soft);color:var(--green)}
   .badge.prox{background:var(--amber-soft);color:var(--amber)}
@@ -721,7 +738,7 @@ function pintarTablero(){
       ${carga}
       <h2>Qué hay que atender</h2>
       <p class="hint">Vencidos primero, luego lo que se acerca. Toque una fila para abrir la ficha.</p>
-      ${lista.length ? `<table><thead><tr>
+      ${lista.length ? `<div class="tabla-envoltorio"><table><thead><tr>
           <th>Equipo</th><th>Componente</th><th>Referencia</th>
           <th class="num">Faltan</th><th class="num">Fecha estimada</th><th>Estado</th>
         </tr></thead><tbody>${lista.map(({eq,it,p}) => `
@@ -732,7 +749,7 @@ function pintarTablero(){
             <td class="num mono">${p.restante > 0 ? nfmt(p.restante)+' '+u(eq) : nfmt(Math.abs(p.restante))+' '+u(eq)+' pasados'}</td>
             <td class="num">${p.fecha ? fechaCorta(p.fecha)+' · '+textoDias(p.dias) : (p.parado ? '<span style="color:var(--steel)">'+estOp(eq).txt.toLowerCase()+'</span>' : '—')}</td>
             <td><span class="badge ${p.clave}">${p.txt}</span></td>
-          </tr>`).join('')}</tbody></table>`
+          </tr>`).join('')}</tbody></table></div>`
         : '<div class="vacio-msg">Nada vencido ni próximo. Registre lecturas y cambios para que el tablero se llene.</div>'}
     </section>`;
   $('#main').querySelectorAll('tr.clic').forEach(t => t.onclick = () => abrirFicha(t.dataset.id));
@@ -782,7 +799,7 @@ function pintarPlanDetalle(plan){
   const tabla = cat => {
     const its = plan.items.filter(i => i.categoria === cat);
     if(!its.length) return '<div class="vacio-msg">Nada en esta sección.</div>';
-    return `<table><thead><tr>
+    return `<div class="tabla-envoltorio"><table><thead><tr>
         <th>Componente</th><th>Referencia</th><th class="num">Cantidad</th><th class="num">Cambio cada</th><th></th>
       </tr></thead><tbody>${its.map(i => `
         <tr><td>${esc(i.componente)}</td>
@@ -790,7 +807,7 @@ function pintarPlanDetalle(plan){
           <td class="num">${i.cantidad ? esc(i.cantidad)+' '+esc(i.unidad) : '—'}</td>
           <td class="num mono">${i.intervalo ? nfmt(i.intervalo)+' '+um : '—'}</td>
           <td><button class="linkbtn" data-item="${i.id}">Editar</button></td></tr>`).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
   };
   $('#main').innerHTML = `
     <button class="backbtn" id="volver-planes" style="display:inline-flex">‹ Todas las hojas</button>
@@ -909,7 +926,7 @@ function wireProveedores(idGrupo, it){
         <td style="text-align:center"><input type="radio" data-pref="${op.id}" name="pk-pref-${idGrupo}" ${estado.preferido===op.id?'checked':''} ${estado.seleccion.has(op.id)?'':'disabled'}></td>
       </tr>`).join('');
     cont.innerHTML = opciones.length
-      ? `<table style="margin-bottom:10px"><thead><tr><th></th><th>Proveedor</th><th>Referencia</th><th class="num">Costo</th><th>Preferido</th></tr></thead><tbody>${filas}</tbody></table>`
+      ? `<div class="tabla-envoltorio"><table style="margin-bottom:10px"><thead><tr><th></th><th>Proveedor</th><th>Referencia</th><th class="num">Costo</th><th>Preferido</th></tr></thead><tbody>${filas}</tbody></table></div>`
       : `<p class="hint" style="margin:0 0 10px">${comp ? 'No hay proveedores registrados todavía para "'+esc(comp)+'".' : 'Escriba primero el componente.'} Vaya a la pestaña <strong>Proveedores</strong> para agregarlo.</p>`;
     cont.querySelectorAll('[data-pick]').forEach(chk => chk.onchange = () => {
       const id = chk.dataset.pick;
@@ -1007,7 +1024,7 @@ function pintarRequisicion(){
         <button class="btn sec" id="req-copiar">Copiar como texto</button>
         <button class="btn sec" id="req-csv">Descargar CSV</button>
       </div>
-      ${filas.length ? `<table><thead><tr>
+      ${filas.length ? `<div class="tabla-envoltorio"><table><thead><tr>
           <th>Referencia</th><th>Proveedor</th><th>Componente</th><th class="num">Cantidad</th><th>Equipos</th><th class="num">Se necesita</th>
         </tr></thead><tbody>${filas.map(f => `
           <tr><td class="mono ${f.referencia?'':'ref vacio'}">${f.referencia?esc(f.referencia):'falta digitar'}</td>
@@ -1017,7 +1034,7 @@ function pintarRequisicion(){
             <td class="mono" style="font-size:13px">${f.equipos.map(esc).join(', ')}</td>
             <td class="num">${f.fecha ? fechaCorta(f.fecha)+' · '+textoDias(f.dias) : '—'}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="3">${filas.length} referencia(s)</td>
-          <td class="num mono">${nfmt(filas.reduce((s,f)=>s+f.cantidad,0))}</td><td colspan="2"></td></tr></tfoot></table>
+          <td class="num mono">${nfmt(filas.reduce((s,f)=>s+f.cantidad,0))}</td><td colspan="2"></td></tr></tfoot></table></div>
         <p class="hint" style="margin-top:12px">Las filas sin referencia salen igual, para que no se le escape ese repuesto; complétela en la hoja de configuración del modelo.${excluidos.length ? ' No se pidió nada para '+excluidos.map(e=>esc(e.codigo)).join(', ')+', que no están operando.' : ''}</p>`
       : `<div class="vacio-msg">No hay nada por pedir en ese plazo.${excluidos.length ? '<br>'+excluidos.map(e=>esc(e.codigo)).join(', ')+' no entran porque no están operando.' : ''}</div>`}
     </section>`;
@@ -1061,13 +1078,13 @@ function pintarReferencias(){
           <div class="tarjeta"><div class="n">${filas.length}</div><div class="t">Referencias distintas</div></div>
           <div class="tarjeta"><div class="n">${compartidas}</div><div class="t">Se usan en más de un equipo</div></div>
         </div>
-        <table><thead><tr><th>Referencia</th><th>Componente</th><th class="num">Equipos</th><th>Cuáles</th><th class="num">Consumo al año</th></tr></thead>
+        <div class="tabla-envoltorio"><table><thead><tr><th>Referencia</th><th>Componente</th><th class="num">Equipos</th><th>Cuáles</th><th class="num">Consumo al año</th></tr></thead>
         <tbody>${filas.map(f => `<tr>
           <td class="mono"><strong>${esc(f.referencia)}</strong></td>
           <td>${[...f.componentes].map(esc).join(' · ')}</td>
           <td class="num">${f.equipos.length}</td>
           <td class="mono" style="font-size:13px">${f.equipos.map(esc).join(', ')}</td>
-          <td class="num mono">${f.anual ? f.anual.toFixed(1)+' '+esc(f.unidad) : '—'}</td></tr>`).join('')}</tbody></table>
+          <td class="num mono">${f.anual ? f.anual.toFixed(1)+' '+esc(f.unidad) : '—'}</td></tr>`).join('')}</tbody></table></div>
         <p class="hint" style="margin-top:12px">El consumo al año se calcula con el uso diario de cada equipo y el intervalo de cambio. Es un estimado para pedir, no un dato contable.</p>`
       : '<div class="vacio-msg">Todavía no hay referencias digitadas. Vaya a Configuración y llene la hoja de cada modelo.</div>'}
     </section>`;
@@ -1109,7 +1126,7 @@ function pintarProveedores(){
       ${nombres.length ? nombres.map(nombre => {
         const filas = porProveedor.get(nombre).slice().sort((a,b) => a.componente.localeCompare(b.componente));
         return `<h2 style="margin-top:20px">${esc(nombre)}</h2>
-          <table><thead><tr><th>Componente</th><th>Referencia</th><th class="num">Costo unit.</th><th>En uso en</th><th></th></tr></thead>
+          <div class="tabla-envoltorio"><table><thead><tr><th>Componente</th><th>Referencia</th><th class="num">Costo unit.</th><th>En uso en</th><th></th></tr></thead>
           <tbody>${filas.map(f => {
             const usos = usosDeCatalogo(f.id);
             return `<tr>
@@ -1118,7 +1135,7 @@ function pintarProveedores(){
               <td class="num mono">${f.costoUnitario?money(f.costoUnitario):'—'}</td>
               <td class="mono" style="font-size:13px">${usos.length ? usos.map(esc).join(', ') : '<span style="color:var(--steel)">ninguno todavía</span>'}</td>
               <td><button class="linkbtn" data-cat-editar="${f.id}">Editar</button></td></tr>`;
-          }).join('')}</tbody></table>`;
+          }).join('')}</tbody></table></div>`;
       }).join('') : '<div class="vacio-msg">Todavía no hay proveedores registrados. Use "+ Agregar proveedor y referencia".</div>'}
     </section>`;
   $('#cat-nuevo').onclick = () => modalCatalogoProveedor(null);
@@ -1240,14 +1257,14 @@ function pintarCostos(){
       ${graficas}
       <h2 style="margin-top:22px">Detalle por equipo</h2>
       <p class="hint">Ordenado del más costoso al más barato.</p>
-      <table><thead><tr><th>Equipo</th><th class="num">Cambios</th><th class="num">Costo total</th>
+      <div class="tabla-envoltorio"><table><thead><tr><th>Equipo</th><th class="num">Cambios</th><th class="num">Costo total</th>
         <th class="num">Período corrido</th><th class="num">Costo por hora o km</th></tr></thead>
       <tbody>${filas.map(f => `<tr class="clic" data-id="${f.eq.id}">
         <td><strong class="mono">${esc(f.eq.codigo)}</strong> <span style="color:var(--steel)">${esc(f.eq.marca)} ${esc(f.eq.modelo)}</span></td>
         <td class="num">${f.cambios || '—'}</td>
         <td class="num mono">${f.total ? money(f.total) : '—'}</td>
         <td class="num mono">${f.periodo ? nfmt(f.periodo)+' '+u(f.eq) : '—'}</td>
-        <td class="num mono">${f.unitario != null ? money(f.unitario)+' / '+u(f.eq) : '—'}</td></tr>`).join('')}</tbody></table>
+        <td class="num mono">${f.unitario != null ? money(f.unitario)+' / '+u(f.eq) : '—'}</td></tr>`).join('')}</tbody></table></div>
     </section>`;
   $('#main').querySelectorAll('tr.clic').forEach(t => t.onclick = () => abrirFicha(t.dataset.id));
 }
@@ -1258,7 +1275,7 @@ function pintarCostos(){
 function tablaItems(eq, categoria){
   const items = itemsDe(eq).filter(i => i.categoria === categoria);
   if(!items.length) return '<div class="vacio-msg">Todavía no hay elementos en esta sección.</div>';
-  return `<table><thead><tr>
+  return `<div class="tabla-envoltorio"><table><thead><tr>
       <th>Componente</th><th>Referencia</th><th class="num">Cantidad</th><th class="num">Cada</th>
       <th class="num">Último cambio</th><th class="num">Faltan</th><th class="num">Fecha estimada</th><th>Estado</th><th></th>
     </tr></thead><tbody>` + items.map(it => {
@@ -1274,7 +1291,7 @@ function tablaItems(eq, categoria){
         <td><span class="badge ${p.clave}">${p.txt}</span></td>
         <td><button class="linkbtn" data-edit-item="${it.id}">Editar</button></td>
       </tr>`;
-    }).join('') + '</tbody></table>';
+    }).join('') + '</tbody></table></div>';
 }
 
 function pintarFicha(){
@@ -1339,7 +1356,7 @@ function pintarFicha(){
 
     <section class="bloque"><h2>Historial de cambios</h2>
       <p class="hint">${hist.length ? hist.length+' registro(s)'+(c.total?' · '+money(c.total)+' acumulado':'') : ''}</p>
-      ${hist.length ? `<table><thead><tr>
+      ${hist.length ? `<div class="tabla-envoltorio"><table><thead><tr>
           <th>Fecha</th><th class="num">${eq.medidor==='km'?'Km':'Horómetro'}</th><th>Se cambió</th><th>Responsable</th><th class="num">Costo</th><th></th>
         </tr></thead><tbody>${hist.map(h => `
           <tr><td class="mono">${esc(h.fecha)}</td>
@@ -1350,7 +1367,7 @@ function pintarFicha(){
               <div style="color:var(--steel);font-size:12px">${fechaHora(h.registrado) ? 'Registrado '+esc(fechaHora(h.registrado))+(desfaseRegistro(h)>1?' ('+desfaseRegistro(h)+' días después)':'') : 'Sin sello de registro'}</div></td>
             <td class="num mono">${h.costo?money(h.costo):'—'}</td>
             <td><button class="linkbtn" data-comp="${h.id}">Comprobante</button><br>
-              <button class="linkbtn del" data-del-hist="${h.id}">Eliminar</button></td></tr>`).join('')}</tbody></table>`
+              <button class="linkbtn del" data-del-hist="${h.id}">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`
         : '<div class="vacio-msg">Sin cambios registrados. Use “Registrar cambio” cuando se intervenga el equipo.</div>'}
     </section>`;
 
@@ -1584,13 +1601,13 @@ function pintarHistorial(){
     <section class="bloque" style="padding-top:24px">
       <h1 class="titulo-vista">Historial de toda la flota</h1>
       <p class="hint">${hist.length} cambio(s) registrado(s)${total?' · '+money(total)+' acumulado':''}.</p>
-      ${hist.length ? `<table><thead><tr><th>Fecha</th><th>Equipo</th><th class="num">Lectura</th><th>Se cambió</th><th>Responsable</th><th class="num">Costo</th></tr></thead>
+      ${hist.length ? `<div class="tabla-envoltorio"><table><thead><tr><th>Fecha</th><th>Equipo</th><th class="num">Lectura</th><th>Se cambió</th><th>Responsable</th><th class="num">Costo</th></tr></thead>
         <tbody>${hist.map(h => `<tr class="clic" data-id="${h.equipoId}">
           <td class="mono">${esc(h.fecha)}</td><td>${esc(nombre(h.equipoId))}</td>
           <td class="num mono">${nfmt(h.lectura)}</td>
           <td>${h.items.map(i => esc(i.componente)).join(', ')}</td>
           <td>${esc(h.responsable||'—')}</td>
-          <td class="num mono">${h.costo?money(h.costo):'—'}</td></tr>`).join('')}</tbody></table>`
+          <td class="num mono">${h.costo?money(h.costo):'—'}</td></tr>`).join('')}</tbody></table></div>`
       : '<div class="vacio-msg">Todavía no hay cambios registrados en ningún equipo.</div>'}
     </section>`;
   $('#main').querySelectorAll('tr.clic').forEach(t => t.onclick = () => abrirFicha(t.dataset.id));
@@ -2030,10 +2047,15 @@ if('serviceWorker' in navigator){
   /* Cuando entra en control una versión nueva del service worker (por una
      publicación reciente), recarga sola una vez para que la pestaña ya
      abierta muestre el cambio, en vez de quedar pegada a la versión vieja
-     hasta que alguien haga un refresco forzado. */
+     hasta que alguien haga un refresco forzado. Solo cuenta como "versión
+     nueva" si YA había un service worker controlando la página antes: en
+     la primera visita (instalación inicial) clients.claim() también
+     dispara este mismo evento, y recargar ahí sería un parpadeo molesto
+     sin ningún cambio real que mostrar. */
+  const habiaControlador = !!navigator.serviceWorker.controller;
   let recargoPorSW = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if(recargoPorSW) return;
+    if(!habiaControlador || recargoPorSW) return;
     recargoPorSW = true;
     location.reload();
   });
