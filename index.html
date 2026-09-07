@@ -1179,11 +1179,20 @@ function modalCatalogoProveedor(entry){
   const nuevo = !entry;
   entry = entry || {id:nid(), proveedor:'', componente:'', referencia:'', costoUnitario:null};
   const comps = componentesExistentes();
+  /* El componente se elige de una lista cerrada (no texto libre): el
+     selector del ítem (wireProveedores) empareja por texto exacto contra
+     data.catalogoProveedores, así que una tilde, mayúscula o palabra
+     distinta a la usada en Configuración dejaba el proveedor guardado
+     pero invisible para asignar y para la ficha. Si el registro ya
+     apuntaba a un componente que ya no existe (se renombró o se borró el
+     ítem), se deja como opción aparte para no perder el dato al editar. */
+  const opciones = entry.componente && !comps.includes(entry.componente) ? [entry.componente, ...comps] : comps;
   abrir(`<h3>${nuevo?'Agregar proveedor y referencia':'Editar'}</h3>
     <div class="body">
       <label class="f">Proveedor<input id="cp-prov" value="${esc(entry.proveedor)}" placeholder="Distribuidora XYZ"></label>
-      <label class="f">Componente<input id="cp-comp" list="cp-comp-lista" value="${esc(entry.componente)}" placeholder="Filtro de aceite de motor"></label>
-      <datalist id="cp-comp-lista">${comps.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <label class="f">Componente${opciones.length ? `<select id="cp-comp">${opciones.map(c => `<option value="${esc(c)}" ${c===entry.componente?'selected':''}>${esc(c)}</option>`).join('')}</select>`
+        : `<select id="cp-comp" disabled><option>No hay componentes en Configuración todavía</option></select>`}</label>
+      ${opciones.length ? '' : '<p class="hint" style="margin-top:-6px">Primero agregue el filtro o lubricante en Configuración (o en la ficha del equipo) y luego vuelva aquí a registrarle el proveedor.</p>'}
       <label class="f">Referencia<input id="cp-ref" class="mono" value="${esc(entry.referencia)}" placeholder="HH150-32430"></label>
       <label class="f">Costo unitario<input type="number" id="cp-costo" value="${entry.costoUnitario??''}"></label>
     </div>
@@ -1192,9 +1201,9 @@ function modalCatalogoProveedor(entry){
     () => {
       $('#ok').onclick = async () => {
         const prov = $('#cp-prov').value.trim();
-        const comp = $('#cp-comp').value.trim();
+        const comp = opciones.length ? $('#cp-comp').value.trim() : '';
         const ref = $('#cp-ref').value.trim();
-        if(!comp) return toast('Escriba el componente (debe coincidir con el nombre usado en Configuración).');
+        if(!comp) return toast('Elija el componente (debe existir primero en Configuración).');
         if(!ref) return toast('Escriba la referencia.');
         Object.assign(entry, {proveedor:prov, componente:comp, referencia:ref,
           costoUnitario:$('#cp-costo').value===''?null:Number($('#cp-costo').value)});
