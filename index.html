@@ -195,9 +195,20 @@
     .p-qr{margin-left:auto;text-align:center;font-size:9px;color:#555}
     .p-qr img{width:92px;height:92px;display:block}
     #print-area h4{font-size:12px;margin:14px 0 5px;padding-bottom:3px;border-bottom:1px solid #ccc}
-    #print-area table{border:1px solid #999;font-size:11px;width:100%;border-collapse:collapse}
+    /* table-layout:fixed obliga a respetar el 100% de ancho de la página;
+       sin esto, una referencia técnica larga sin espacios (p. ej. un código
+       de parte) puede empujar la tabla más allá del margen impreso en vez
+       de ajustarse — se veía cortada por la derecha. */
+    #print-area table{border:1px solid #999;font-size:11px;width:100%;border-collapse:collapse;table-layout:fixed}
     #print-area th{background:#EEE;padding:4px 6px;border-bottom:1px solid #999;text-align:left}
     #print-area td{padding:4px 6px;border-bottom:1px solid #DDD}
+    #print-area td,#print-area th{word-break:break-word;overflow-wrap:anywhere}
+    .p-items th:nth-child(1),.p-items td:nth-child(1){width:19%}
+    .p-items th:nth-child(2),.p-items td:nth-child(2){width:29%}
+    .p-items th:nth-child(3),.p-items td:nth-child(3){width:9%}
+    .p-items th:nth-child(4),.p-items td:nth-child(4){width:12%}
+    .p-items th:nth-child(5),.p-items td:nth-child(5){width:15%}
+    .p-items th:nth-child(6),.p-items td:nth-child(6){width:16%}
     #print-area tr{page-break-inside:avoid}
     .p-firma{margin-top:26px;display:flex;gap:40px;font-size:11px}
     .p-firma div{flex:1;border-top:1px solid #333;padding-top:4px}
@@ -1507,7 +1518,7 @@ function qrDataURL(texto, size){
 function tablaPrint(eq, categoria, titulo){
   const items = itemsDe(eq).filter(i => i.categoria === categoria);
   if(!items.length) return '';
-  return `<h4>${titulo}</h4><table><thead><tr>
+  return `<h4>${titulo}</h4><table class="p-items"><thead><tr>
       <th>Componente</th><th>Referencia</th><th>Cantidad</th><th>Cambio cada</th><th>Último cambio</th><th>Próximo a los</th>
     </tr></thead><tbody>${items.map(it => {
       const p = proyeccion(eq,it);
