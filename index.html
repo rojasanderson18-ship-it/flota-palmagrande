@@ -136,7 +136,6 @@
   .prov-card .tabla-envoltorio{margin:0}
   .prov-card table{border:none;border-radius:0}
   .chip{display:inline-block;padding:2px 9px;margin:2px 4px 2px 0;border-radius:20px;font-size:12px;font-weight:600;background:#E7EDF3;color:#2A4C6B;white-space:nowrap}
-  .chip.vacio{background:none;border:1px dashed var(--line);color:var(--steel);font-weight:400;font-style:italic}
 
   .tarjetas{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
   .tarjeta{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;min-width:132px;flex:1}
@@ -2643,16 +2642,40 @@ function modalCambio(eq){
       }).join('')}</div>
       <div class="fila" style="margin-top:14px">
         <label class="f">Responsable<input id="r" value="Tulio Antonio Olaya González"></label>
-        <label class="f">Costo total<input type="number" id="c" placeholder="0"></label>
+        <label class="f">Costo total<input type="number" id="c" placeholder="0">
+          <span class="hint" id="c-hint" style="display:block"></span></label>
       </div>
       <label class="f">Observaciones<textarea id="o" rows="2" placeholder="Se encontró fuga en el retén"></textarea></label>
     </div>
     <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar cambio</button></div>`,
     () => {
+      /* El costo se sugiere solo (cantidad × costo unitario del proveedor
+         elegido en lo marcado), para no obligar a digitarlo de memoria cada
+         vez; en cuanto el usuario lo toca a mano, se deja de tocar. */
+      let costoTocado = false;
+      const cInput = $('#c'), cHint = $('#c-hint');
+      cInput.oninput = () => { costoTocado = true; cHint.textContent = ''; };
+      const recalcularCosto = () => {
+        if(costoTocado) return;
+        const marcados = [...$('#items').querySelectorAll('input:checked')].map(i => i.value);
+        if(!marcados.length){ cInput.value = ''; cHint.textContent = ''; return; }
+        let sugerido = 0, faltaCosto = false;
+        marcados.forEach(id => {
+          const it = items.find(x => x.id === id);
+          const sel = $('#items').querySelector('select.prov-usado[data-for="'+id+'"]');
+          const provId = sel ? sel.value : it.proveedorPreferidoId;
+          const prov = proveedoresDe(it).find(pv => pv.id === provId);
+          if(prov && prov.costoUnitario != null) sugerido += prov.costoUnitario * (it.cantidad||1);
+          else faltaCosto = true;
+        });
+        cInput.value = sugerido || '';
+        cHint.textContent = sugerido ? 'Sugerido según el catálogo de proveedores'+(faltaCosto?' (incompleto, falta costo de algo marcado)':'')+'. Ajuste si hace falta.' : '';
+      };
       $('#items').querySelectorAll('.check').forEach(l => {
         const cb = l.querySelector('input');
-        cb.onchange = () => l.classList.toggle('on', cb.checked);
+        cb.onchange = () => { l.classList.toggle('on', cb.checked); recalcularCosto(); };
       });
+      $('#items').querySelectorAll('select.prov-usado').forEach(s => s.onchange = recalcularCosto);
       $('#ok').onclick = async () => {
         const ids = [...$('#items').querySelectorAll('input:checked')].map(i => i.value);
         if(!ids.length) return toast('Marque al menos un filtro o aceite.');
