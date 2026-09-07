@@ -240,8 +240,9 @@
     .p-items th:nth-child(5),.p-items td:nth-child(5){width:15%}
     .p-items th:nth-child(6),.p-items td:nth-child(6){width:16%}
     #print-area tr{page-break-inside:avoid}
-    .p-firma{margin-top:50px;display:flex;gap:40px;font-size:11px}
+    .p-firma{margin-top:50px;display:flex;gap:20px;font-size:11px}
     .p-firma div{flex:1;border-top:1px solid #333;padding-top:4px}
+    .p-firma-rol{display:block;color:#666;font-size:10px}
     .p-pie{margin-top:16px;font-size:10px;color:#666;border-top:1px solid #CCC;padding-top:6px}
     .p-datos{margin-bottom:4px}
     .p-datos th{width:15%;background:#F4F4F4;font-size:10px;text-transform:uppercase;letter-spacing:.03em;color:#444}
@@ -2186,7 +2187,12 @@ function imprimirComprobante(h){
       ${h.obs ? `<h4>Observaciones</h4><div style="font-size:11px;border:1px solid #DDD;padding:6px 8px;min-height:34px">${esc(h.obs)}</div>`
               : '<h4>Observaciones</h4><div style="border:1px solid #DDD;height:34px"></div>'}
 
-      <div class="p-firma"><div>Mecánico que ejecutó</div><div>Coordinador de campo</div><div>Fecha de recibido</div></div>
+      <div class="p-firma">
+        <div>${esc(h.responsable||'—')}<br><span class="p-firma-rol">Mecánico que ejecutó</span></div>
+        <div>Anderson Rojas<br><span class="p-firma-rol">Superintendente</span></div>
+        <div>Fernando Sánchez<br><span class="p-firma-rol">Director técnico</span></div>
+        <div>&nbsp;<br><span class="p-firma-rol">Fecha de recibido</span></div>
+      </div>
 
       <div class="p-pie">
         ${sello ? 'Registrado en el sistema el '+esc(sello)+(desf>1?' · '+desf+' días después de la fecha declarada del cambio':'')
@@ -2553,7 +2559,7 @@ function modalCambio(eq){
           ${selector}</span></label>`;
       }).join('')}</div>
       <div class="fila" style="margin-top:14px">
-        <label class="f">Responsable<input id="r" value="Tulio"></label>
+        <label class="f">Responsable<input id="r" value="Tulio Antonio Olaya González"></label>
         <label class="f">Costo total<input type="number" id="c" placeholder="0"></label>
       </div>
       <label class="f">Observaciones<textarea id="o" rows="2" placeholder="Se encontró fuga en el retén"></textarea></label>
