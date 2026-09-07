@@ -6,8 +6,11 @@ máquinas de campo (por horómetro) y camiones (por odómetro).
 
 ## Qué hace
 
-- Hojas de configuración por modelo: qué filtros y lubricantes lleva, con
-  qué referencia, en qué cantidad y cada cuánto se cambian.
+- Hojas de configuración por modelo: qué filtros y lubricantes lleva, en qué
+  cantidad y cada cuánto se cambian. Cada uno puede tener varios proveedores
+  (a veces se compra en uno, a veces en otro), con su propia referencia y
+  costo unitario; se marca uno como preferido, y al registrar un cambio se
+  puede elegir cuál de todos se usó esa vez.
 - Ficha por equipo con lecturas, bitácora de uso y registro de cambios.
 - Tablero con lo vencido y lo próximo, proyectado según el uso diario medido
   de cada equipo.

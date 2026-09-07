@@ -366,7 +366,7 @@ const trabajando = eq => estOp(eq).cuenta;
 let uid = Date.now();
 const nid = () => 'i' + (++uid).toString(36);
 const crearItems = p => p.map(([categoria,componente,unidad,intervalo]) => ({
-  id:nid(), categoria, componente, referencia:'', cantidad:null, unidad, intervalo
+  id:nid(), categoria, componente, proveedores:[], proveedorPreferidoId:null, cantidad:null, unidad, intervalo
 }));
 function crearPlan(nombre, tipo){
   return {id:nid(), nombre, tipo, medidor: tipo==='camion'?'km':'horas',
@@ -469,6 +469,23 @@ function fijarUltimo(eq, itemId, lectura, fecha){
   eq.estado = eq.estado || {};
   eq.estado[itemId] = {ultLectura:lectura, ultFecha:fecha};
 }
+
+/* ---------------- Proveedores por ítem ----------------
+   Cada filtro/lubricante puede tener varias referencias, una por
+   proveedor (a veces se compra en uno, a veces en otro, y el número de
+   parte puede cambiar). proveedorPreferidoId marca cuál se usa por
+   defecto en fichas, requisición y catálogo; al registrar un cambio se
+   puede elegir cuál de todos se usó esa vez. */
+function refPreferida(it){
+  const provs = it.proveedores || [];
+  if(!provs.length) return null;
+  return provs.find(p => p.id === it.proveedorPreferidoId) || provs[0];
+}
+function refTexto(it){
+  const p = refPreferida(it);
+  return p ? p.referencia : '';
+}
+function tieneRef(it){ return !!(it.proveedores && it.proveedores.length); }
 
 /* ---------------- Fotos ---------------- */
 function comprimirFoto(file){
@@ -583,7 +600,7 @@ function pendientes(diasMax){
   }));
   return out.sort((a,b) => (a.p.dias ?? 9e9) - (b.p.dias ?? 9e9));
 }
-function faltanRefsPlan(plan){ return plan.items.filter(i => !i.referencia).length; }
+function faltanRefsPlan(plan){ return plan.items.filter(i => !tieneRef(i)).length; }
 
 /* ---------------- Gráficas (HTML puro, sin librerías) ---------------- */
 function barrasH(filas){
@@ -706,7 +723,7 @@ function pintarTablero(){
           <tr class="clic" data-id="${eq.id}">
             <td><strong class="mono">${esc(eq.codigo)}</strong> <span style="color:var(--steel)">${esc(eq.modelo)}</span></td>
             <td>${esc(it.componente)}</td>
-            <td class="ref mono ${it.referencia?'':'vacio'}">${it.referencia?esc(it.referencia):'sin referencia'}</td>
+            <td class="ref mono ${tieneRef(it)?'':'vacio'}">${tieneRef(it)?esc(refTexto(it)):'sin referencia'}</td>
             <td class="num mono">${p.restante > 0 ? nfmt(p.restante)+' '+u(eq) : nfmt(Math.abs(p.restante))+' '+u(eq)+' pasados'}</td>
             <td class="num">${p.fecha ? fechaCorta(p.fecha)+' · '+textoDias(p.dias) : (p.parado ? '<span style="color:var(--steel)">'+estOp(eq).txt.toLowerCase()+'</span>' : '—')}</td>
             <td><span class="badge ${p.clave}">${p.txt}</span></td>
@@ -764,7 +781,7 @@ function pintarPlanDetalle(plan){
         <th>Componente</th><th>Referencia</th><th class="num">Cantidad</th><th class="num">Cambio cada</th><th></th>
       </tr></thead><tbody>${its.map(i => `
         <tr><td>${esc(i.componente)}</td>
-          <td class="ref mono ${i.referencia?'':'vacio'}">${i.referencia?esc(i.referencia):'falta digitar'}</td>
+          <td class="ref mono ${tieneRef(i)?'':'vacio'}">${tieneRef(i)?esc(refTexto(i))+(i.proveedores.length>1?' <span style="color:var(--steel)">+'+(i.proveedores.length-1)+' más</span>':''):'falta digitar'}</td>
           <td class="num">${i.cantidad ? esc(i.cantidad)+' '+esc(i.unidad) : '—'}</td>
           <td class="num mono">${i.intervalo ? nfmt(i.intervalo)+' '+um : '—'}</td>
           <td><button class="linkbtn" data-item="${i.id}">Editar</button></td></tr>`).join('')}
@@ -789,8 +806,14 @@ function pintarPlanDetalle(plan){
   $('#main').querySelectorAll('[data-item]').forEach(b => b.onclick = () => modalItemPlan(plan, plan.items.find(i => i.id === b.dataset.item)));
   $('#plan-editar').onclick = () => modalPlanNombre(plan);
   $('#plan-duplicar').onclick = async () => {
+    const copiarItem = i => {
+      const idsNuevos = new Map((i.proveedores||[]).map(p => [p.id, nid()]));
+      return Object.assign({}, i, {id:nid(),
+        proveedores:(i.proveedores||[]).map(p => Object.assign({}, p, {id:idsNuevos.get(p.id)})),
+        proveedorPreferidoId: idsNuevos.get(i.proveedorPreferidoId) || null});
+    };
     const copia = {id:nid(), nombre:plan.nombre+' (copia)', tipo:plan.tipo, medidor:plan.medidor,
-                   items:plan.items.map(i => Object.assign({}, i, {id:nid()}))};
+                   items:plan.items.map(copiarItem)};
     data.planes.push(copia); planSel = copia.id;
     await persistir(); pintarMain(); avisar('Hoja duplicada');
   };
@@ -852,11 +875,58 @@ function modalPlanNombre(plan){
       plan.nombre = n; await persistir(); cerrar(); pintarMain(); avisar('Hoja renombrada');
     };});
 }
+/* ---------------- Gestor de proveedores dentro del editor de un ítem ----------------
+   Varias filas (proveedor + referencia + costo unitario), una marcada como
+   preferida. Se manipula el DOM directamente (agregar/quitar filas) en vez
+   de llevar un estado JS aparte, para no perder lo que la persona ya iba
+   escribiendo en las demás filas. */
+function filaProveedor(p, preferidoId){
+  return `<div class="fila" data-pv="${p.id}" style="align-items:flex-end;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line)">
+    <label class="f" style="flex:2;margin-bottom:0">Proveedor<input class="mono pv-nombre" value="${esc(p.proveedor||'')}" placeholder="Distribuidora XYZ"></label>
+    <label class="f" style="flex:2;margin-bottom:0">Referencia<input class="mono pv-ref" value="${esc(p.referencia||'')}" placeholder="HH150-32430"></label>
+    <label class="f" style="flex:1;margin-bottom:0">Costo unit.<input type="number" class="pv-costo" value="${p.costoUnitario??''}" placeholder="0"></label>
+    <label style="display:flex;align-items:center;gap:4px;margin-bottom:8px;font-size:13px;white-space:nowrap"><input type="radio" name="pv-pref-${p._grupo||''}" value="${p.id}" ${p.id===preferidoId?'checked':''}> Preferido</label>
+    <button type="button" class="linkbtn del" data-pvdel style="margin-bottom:8px">Quitar</button>
+  </div>`;
+}
+function htmlProveedores(it, idGrupo){
+  const provs = (it.proveedores||[]).map(p => Object.assign({}, p, {_grupo:idGrupo}));
+  return `<div class="sep" style="margin-top:0">Proveedores<small>Puede tener varios (a veces se compra en uno, a veces en otro); marque cuál usar por defecto.</small></div>
+    <div id="provs-${idGrupo}">${provs.map(p => filaProveedor(p, it.proveedorPreferidoId)).join('')}</div>
+    <button type="button" class="btn sec" id="prov-agregar-${idGrupo}" style="margin-bottom:14px">+ Agregar proveedor</button>`;
+}
+/* onMount: engancha agregar/quitar filas. Llamar dentro del onMount del abrir(). */
+function wireProveedores(idGrupo){
+  const lista = $('#provs-'+idGrupo);
+  lista.addEventListener('click', e => {
+    const btn = e.target.closest('[data-pvdel]');
+    if(btn) btn.closest('[data-pv]').remove();
+  });
+  $('#prov-agregar-'+idGrupo).onclick = () => {
+    const esPrimero = !lista.querySelector('[data-pv]');
+    const nuevoId = nid();
+    lista.insertAdjacentHTML('beforeend', filaProveedor({id:nuevoId, proveedor:'', referencia:'', costoUnitario:null, _grupo:idGrupo}, esPrimero ? nuevoId : null));
+  };
+}
+/* Lee las filas del DOM al guardar. Descarta las que quedaron sin referencia. */
+function leerProveedores(idGrupo){
+  const lista = $('#provs-'+idGrupo);
+  const provs = [...lista.querySelectorAll('[data-pv]')].map(row => ({
+    id: row.dataset.pv,
+    proveedor: row.querySelector('.pv-nombre').value.trim(),
+    referencia: row.querySelector('.pv-ref').value.trim(),
+    costoUnitario: row.querySelector('.pv-costo').value === '' ? null : Number(row.querySelector('.pv-costo').value)
+  })).filter(p => p.referencia);
+  const marcado = lista.querySelector('input[type=radio]:checked');
+  let preferidoId = marcado ? marcado.value : null;
+  if(!provs.some(p => p.id === preferidoId)) preferidoId = provs[0] ? provs[0].id : null;
+  return {proveedores:provs, proveedorPreferidoId:preferidoId};
+}
 function modalItemPlan(plan, it){
   const nuevo = !it;
   const um = plan.medidor === 'km' ? 'km' : 'h';
   const eqs = equiposDePlan(plan.id);
-  it = it || {id:nid(), categoria:'filtro', componente:'', referencia:'', cantidad:null, unidad:'und', intervalo:null};
+  it = it || {id:nid(), categoria:'filtro', componente:'', proveedores:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null};
   abrir(`<h3>${nuevo?'Agregar elemento':'Editar elemento'} — ${esc(plan.nombre)}</h3>
     <div class="body">
       ${eqs.length>1 ? `<div class="aviso">Este cambio aplica a los ${eqs.length} equipos con esta hoja: ${eqs.map(e=>esc(e.codigo)).join(', ')}.</div>` : ''}
@@ -866,22 +936,23 @@ function modalItemPlan(plan, it){
           <option value="lubricante" ${it.categoria==='lubricante'?'selected':''}>Lubricante</option></select></label>
         <label class="f">Componente<input id="comp" value="${esc(it.componente)}" placeholder="Filtro de aceite de motor"></label>
       </div>
-      <label class="f">Referencia<input id="ref" class="mono" value="${esc(it.referencia)}" placeholder="HH150-32430"></label>
       <div class="fila">
         <label class="f">Cantidad<input type="number" step="0.1" id="cant" value="${it.cantidad??''}"></label>
         <label class="f">Unidad<select id="uni">${['und','gal','L','kg'].map(x=>`<option ${it.unidad===x?'selected':''}>${x}</option>`).join('')}</select></label>
         <label class="f">Cambio cada (${um})<input type="number" id="int" value="${it.intervalo??''}"></label>
       </div>
+      ${htmlProveedores(it, 'plan')}
     </div>
     <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar</button>'}
       <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
     () => {
+      wireProveedores('plan');
       $('#ok').onclick = async () => {
         const comp = $('#comp').value.trim();
         if(!comp) return toast('Escriba el nombre del componente.');
-        Object.assign(it, {categoria:$('#cat').value, componente:comp, referencia:$('#ref').value.trim(),
+        Object.assign(it, {categoria:$('#cat').value, componente:comp,
           cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
-          intervalo:$('#int').value===''?null:Number($('#int').value)});
+          intervalo:$('#int').value===''?null:Number($('#int').value)}, leerProveedores('plan'));
         if(nuevo) plan.items.push(it);
         await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Configuración guardada');
       };
@@ -901,8 +972,8 @@ function modalItemPlan(plan, it){
 function agruparRequisicion(dias){
   const map = new Map();
   pendientes(dias).forEach(({eq,it,p}) => {
-    const clave = (it.referencia || 'SIN-REF · '+it.componente).toUpperCase();
-    if(!map.has(clave)) map.set(clave, {referencia:it.referencia, componente:it.componente, unidad:it.unidad, cantidad:0, equipos:[], dias:p.dias, fecha:p.fecha});
+    const clave = (refTexto(it) || 'SIN-REF · '+it.componente).toUpperCase();
+    if(!map.has(clave)) map.set(clave, {referencia:refTexto(it), componente:it.componente, unidad:it.unidad, cantidad:0, equipos:[], dias:p.dias, fecha:p.fecha});
     const g = map.get(clave);
     g.cantidad += Number(it.cantidad) || 0;
     g.equipos.push(eq.codigo);
@@ -964,9 +1035,10 @@ function pintarRequisicion(){
 function pintarReferencias(){
   const map = new Map();
   data.equipos.forEach(eq => itemsDe(eq).forEach(it => {
-    if(!it.referencia) return;
-    const k = it.referencia.trim().toUpperCase();
-    if(!map.has(k)) map.set(k, {referencia:it.referencia.trim(), componentes:new Set(), unidad:it.unidad, equipos:[], anual:0});
+    if(!tieneRef(it)) return;
+    const ref = refTexto(it);
+    const k = ref.trim().toUpperCase();
+    if(!map.has(k)) map.set(k, {referencia:ref.trim(), componentes:new Set(), unidad:it.unidad, equipos:[], anual:0});
     const g = map.get(k);
     g.componentes.add(it.componente); g.equipos.push(eq.codigo);
     if(it.intervalo && it.cantidad && trabajando(eq)) g.anual += (usoDiario(eq).valor*365/it.intervalo) * Number(it.cantidad);
@@ -1092,7 +1164,7 @@ function tablaItems(eq, categoria){
       const p = proyeccion(eq,it);
       return `<tr>
         <td>${esc(it.componente)}${it.origen==='propio'?' <span class="badge propio">solo este equipo</span>':''}</td>
-        <td class="ref mono ${it.referencia?'':'vacio'}">${it.referencia?esc(it.referencia):'sin referencia'}</td>
+        <td class="ref mono ${tieneRef(it)?'':'vacio'}">${tieneRef(it)?esc(refTexto(it))+(it.proveedores.length>1?' <span style="color:var(--steel)">+'+(it.proveedores.length-1)+'</span>':''):'sin referencia'}</td>
         <td class="num">${it.cantidad ? esc(it.cantidad)+' '+esc(it.unidad) : '—'}</td>
         <td class="num mono">${it.intervalo ? nfmt(it.intervalo)+' '+u(eq) : '—'}</td>
         <td class="num mono">${it.ultLectura!=null ? nfmt(it.ultLectura)+' '+u(eq) : '—'}</td>
@@ -1111,7 +1183,7 @@ function pintarFicha(){
   const uso = usoDiario(eq);
   const hist = data.historial.filter(h => h.equipoId === eq.id).sort((a,b) => b.fecha.localeCompare(a.fecha));
   const c = costoEquipo(eq);
-  const sinRef = itemsDe(eq).filter(i => !i.referencia).length;
+  const sinRef = itemsDe(eq).filter(i => !tieneRef(i)).length;
 
   $('#main').innerHTML = `
     <button class="backbtn" id="volver">‹ Equipos</button>
@@ -1171,7 +1243,7 @@ function pintarFicha(){
         </tr></thead><tbody>${hist.map(h => `
           <tr><td class="mono">${esc(h.fecha)}</td>
             <td class="num mono">${nfmt(h.lectura)}</td>
-            <td>${h.items.map(i => esc(i.componente)+(i.referencia?' <span class="mono" style="color:var(--steel)">'+esc(i.referencia)+'</span>':'')).join('<br>')}
+            <td>${h.items.map(i => esc(i.componente)+(i.referencia?' <span class="mono" style="color:var(--steel)">'+esc(i.referencia)+(i.proveedor?' · '+esc(i.proveedor):'')+'</span>':'')).join('<br>')}
               ${h.obs?`<div style="color:var(--steel);font-size:13px">${esc(h.obs)}</div>`:''}</td>
             <td>${esc(h.responsable||'—')}
               <div style="color:var(--steel);font-size:12px">${fechaHora(h.registrado) ? 'Registrado '+esc(fechaHora(h.registrado))+(desfaseRegistro(h)>1?' ('+desfaseRegistro(h)+' días después)':'') : 'Sin sello de registro'}</div></td>
@@ -1223,7 +1295,7 @@ function modalItemEquipo(eq, it){
   const plan = planPorId(eq.planId);
   const eqs = plan ? equiposDePlan(plan.id) : [];
   const esPlan = it ? it.origen === 'plan' : true;
-  const base = it || {id:nid(), categoria:'filtro', componente:'', referencia:'', cantidad:null, unidad:'und', intervalo:null, ultLectura:null, ultFecha:''};
+  const base = it || {id:nid(), categoria:'filtro', componente:'', proveedores:[], proveedorPreferidoId:null, cantidad:null, unidad:'und', intervalo:null, ultLectura:null, ultFecha:''};
   abrir(`<h3>${nuevo?'Agregar filtro o aceite':'Editar'} — ${esc(eq.codigo)}</h3>
     <div class="body">
       ${nuevo ? `<label class="f">¿A quién aplica?<select id="alcance">
@@ -1236,12 +1308,12 @@ function modalItemEquipo(eq, it){
           <option value="lubricante" ${base.categoria==='lubricante'?'selected':''}>Lubricante</option></select></label>
         <label class="f">Componente<input id="comp" value="${esc(base.componente)}" placeholder="Filtro de aceite de motor"></label>
       </div>
-      <label class="f">Referencia<input id="ref" class="mono" value="${esc(base.referencia)}" placeholder="HH150-32430"></label>
       <div class="fila">
         <label class="f">Cantidad<input type="number" step="0.1" id="cant" value="${base.cantidad??''}"></label>
         <label class="f">Unidad<select id="uni">${['und','gal','L','kg'].map(x=>`<option ${base.unidad===x?'selected':''}>${x}</option>`).join('')}</select></label>
         <label class="f">Cambio cada (${u(eq)})<input type="number" id="int" value="${base.intervalo??''}"></label>
       </div>
+      ${htmlProveedores(base, 'eq')}
       <div class="sep">Último cambio en ${esc(eq.codigo)}<small>Este dato es propio del equipo y no afecta a los demás.</small></div>
       <div class="fila">
         <label class="f">Se hizo a los (${u(eq)})<input type="number" id="ult" value="${base.ultLectura??''}"></label>
@@ -1251,12 +1323,13 @@ function modalItemEquipo(eq, it){
     <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar</button>'}
       <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
     () => {
+      wireProveedores('eq');
       $('#ok').onclick = async () => {
         const comp = $('#comp').value.trim();
         if(!comp) return toast('Escriba el nombre del componente.');
-        const def = {categoria:$('#cat').value, componente:comp, referencia:$('#ref').value.trim(),
+        const def = Object.assign({categoria:$('#cat').value, componente:comp,
           cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
-          intervalo:$('#int').value===''?null:Number($('#int').value)};
+          intervalo:$('#int').value===''?null:Number($('#int').value)}, leerProveedores('eq'));
         let id = base.id;
         if(nuevo){
           const alPlan = $('#alcance').value === 'plan' && plan;
@@ -1320,7 +1393,7 @@ function tablaPrint(eq, categoria, titulo){
     </tr></thead><tbody>${items.map(it => {
       const p = proyeccion(eq,it);
       return `<tr><td>${esc(it.componente)}</td>
-        <td><strong>${it.referencia?esc(it.referencia):'—'}</strong></td>
+        <td><strong>${tieneRef(it)?esc(refTexto(it)):'—'}</strong></td>
         <td>${it.cantidad?esc(it.cantidad)+' '+esc(it.unidad):'—'}</td>
         <td>${it.intervalo?nfmt(it.intervalo)+' '+u(eq):'—'}</td>
         <td>${it.ultLectura!=null?nfmt(it.ultLectura)+' '+u(eq)+(it.ultFecha?' · '+it.ultFecha:''):'—'}</td>
@@ -1361,7 +1434,7 @@ function imprimirComprobante(h){
       <table><thead><tr><th style="width:44%">Componente</th><th>Referencia</th><th>Cantidad</th></tr></thead>
         <tbody>${h.items.map(i => `<tr>
           <td>${esc(i.componente)}</td>
-          <td><strong>${i.referencia?esc(i.referencia):'—'}</strong></td>
+          <td><strong>${i.referencia?esc(i.referencia):'—'}</strong>${i.proveedor?' <span style="color:#777">('+esc(i.proveedor)+')</span>':''}</td>
           <td>${i.cantidad?esc(i.cantidad)+' '+esc(i.unidad||''):'—'}</td></tr>`).join('')}</tbody></table>
 
       ${h.obs ? `<h4>Observaciones</h4><div style="font-size:11px;border:1px solid #DDD;padding:6px 8px;min-height:34px">${esc(h.obs)}</div>`
@@ -1697,9 +1770,14 @@ function modalCambio(eq){
       <label class="f">Qué se cambió</label>
       <div id="items">${items.map(it => {
         const p = proyeccion(eq,it);
+        const provs = it.proveedores || [];
+        const selector = provs.length>1 ? `<select class="prov-usado" data-for="${it.id}" style="display:block;margin-top:4px;font-size:12px;padding:3px 6px;width:100%">
+            ${provs.map(pv => `<option value="${pv.id}" ${pv.id===it.proveedorPreferidoId?'selected':''}>${esc(pv.proveedor||'(sin nombre)')} — ${esc(pv.referencia)}</option>`).join('')}
+          </select>` : '';
         return `<label class="check"><input type="checkbox" value="${it.id}">
-          <span><span class="c-nom">${esc(it.componente)}</span><br>
-          <span class="c-sub">${it.referencia?esc(it.referencia):'sin referencia'}${it.cantidad?' · '+esc(it.cantidad)+' '+esc(it.unidad):''} · ${p.txt}</span></span></label>`;
+          <span style="flex:1"><span class="c-nom">${esc(it.componente)}</span><br>
+          <span class="c-sub">${tieneRef(it)?esc(refTexto(it)):'sin referencia'}${it.cantidad?' · '+esc(it.cantidad)+' '+esc(it.unidad):''} · ${p.txt}</span>
+          ${selector}</span></label>`;
       }).join('')}</div>
       <div class="fila" style="margin-top:14px">
         <label class="f">Responsable<input id="r" value="Tulio"></label>
@@ -1720,7 +1798,11 @@ function modalCambio(eq){
         const regs = ids.map(id => {
           const it = items.find(x => x.id === id);
           fijarUltimo(eq, id, lectura, fecha);
-          return {itemId:id, componente:it.componente, referencia:it.referencia, cantidad:it.cantidad, unidad:it.unidad};
+          const sel = $('#items').querySelector('select.prov-usado[data-for="'+id+'"]');
+          const provId = sel ? sel.value : it.proveedorPreferidoId;
+          const prov = (it.proveedores||[]).find(pv => pv.id === provId) || null;
+          return {itemId:id, componente:it.componente, proveedor: prov ? prov.proveedor : '',
+            referencia: prov ? prov.referencia : '', cantidad:it.cantidad, unidad:it.unidad};
         });
         const coherente = registrarLectura(eq, lectura, fecha);
         data.historial.push({id:nid(), equipoId:eq.id, fecha, lectura, items:regs,
@@ -1738,14 +1820,25 @@ function pintarMain(){
              referencias:pintarReferencias, costos:pintarCostos, hist:pintarHistorial, datos:pintarDatos}[vista];
   (f || pintarTablero)();
 }
+/* Convierte una referencia suelta (versión anterior, un texto por ítem) en
+   la lista de proveedores nueva, sin perder lo que ya había digitado. */
+function migrarRefItem(it){
+  if(!it.proveedores){
+    it.proveedores = it.referencia ? [{id:nid(), proveedor:'', referencia:it.referencia, costoUnitario:null}] : [];
+    it.proveedorPreferidoId = it.proveedores[0] ? it.proveedores[0].id : null;
+  }
+  delete it.referencia;
+}
 function normalizar(){
   data.config = data.config || {urlBase:'', horizonte:30};
   data.historial = data.historial || [];
   data.planes = data.planes || [];
+  data.planes.forEach(p => p.items.forEach(migrarRefItem));
   data.equipos.forEach(e => {
     e.bitacora = e.bitacora || [];
     e.estado = e.estado || {};
     e.propios = e.propios || [];
+    e.propios.forEach(migrarRefItem);
     if(e.usoDia == null) e.usoDia = USO_DEF[e.tipo] || 6;
     if(!ESTADOS[e.operativo]) e.operativo = 'operativo';
     if(e.lectura && e.lecturaFecha && !e.bitacora.length) e.bitacora.push({fecha:e.lecturaFecha, lectura:e.lectura});
