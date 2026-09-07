@@ -551,6 +551,23 @@ function refTexto(it){
   return p ? p.referencia : '';
 }
 function tieneRef(it){ return !!(it.proveedorIds && it.proveedorIds.length); }
+/* Dos hojas de configuración distintas (p. ej. un camión Volkswagen y un
+   tractor Lovol) pueden llamar a un ítem exactamente igual ("Filtro de
+   aire externo/primario") sin que sea la MISMA pieza física. Como el
+   catálogo empareja por ese texto, sin este freno una referencia
+   registrada para un modelo aparecía también como opción al editar el
+   ítem homónimo de un modelo completamente distinto. Se rastrea a qué
+   hoja(s) o equipo(s) propios ya está aplicada cada entrada del
+   catálogo, para poder limitar las opciones que se ofrecen al alcance
+   real de lo que se está editando — sin dejar de mostrar una entrada que
+   todavía no se ha aplicado a nada (sigue siendo candidata en cualquier
+   lado hasta que se use la primera vez). */
+function alcancesDeEntrada(entryId){
+  const s = new Set();
+  data.planes.forEach(p => p.items.forEach(it => { if((it.proveedorIds||[]).includes(entryId)) s.add('plan:'+p.id); }));
+  data.equipos.forEach(eq => (eq.propios||[]).forEach(it => { if((it.proveedorIds||[]).includes(entryId)) s.add('equipo:'+eq.id); }));
+  return s;
+}
 
 /* ---------------- Fotos ---------------- */
 function comprimirFoto(file){
@@ -958,7 +975,7 @@ function htmlProveedores(it, idGrupo){
 /* onMount: dibuja el selector y devuelve una función para leer el resultado
    al guardar. Llamar dentro del onMount del abrir(), después de que #comp
    ya esté en el DOM. */
-function wireProveedores(idGrupo, it){
+function wireProveedores(idGrupo, it, alcanceFn){
   const estado = {seleccion:new Set(it.proveedorIds||[]), preferido:it.proveedorPreferidoId||null, filtro:''};
   const compActual = () => ($('#comp')?.value || it.componente || '').trim();
   /* Con pocos proveedores una tabla plana alcanza, pero al crecer el
@@ -969,7 +986,16 @@ function wireProveedores(idGrupo, it){
      proveedor o referencia, mostrado solo cuando de verdad hace falta. */
   function redibujar(){
     const comp = compActual();
-    const todas = comp ? catalogoDeComponente(comp) : [];
+    const alcance = alcanceFn ? alcanceFn() : null;
+    /* Filtra las que ya están aplicadas a OTRA hoja/equipo distinto del
+       que se está editando (mismo nombre de componente, pieza distinta).
+       Una entrada que todavía no se aplicó a nada sigue siendo candidata
+       en cualquier lado; lo ya elegido en este ítem nunca se oculta. */
+    const todas = (comp ? catalogoDeComponente(comp) : []).filter(op => {
+      if(estado.seleccion.has(op.id) || !alcance) return true;
+      const alcances = alcancesDeEntrada(op.id);
+      return alcances.size === 0 || alcances.has(alcance);
+    });
     const cont = $('#provs-'+idGrupo);
     if(!cont) return;
     const q = estado.filtro.trim().toLowerCase();
@@ -1019,6 +1045,11 @@ function wireProveedores(idGrupo, it){
   redibujar();
   const inputComp = $('#comp');
   if(inputComp) inputComp.addEventListener('input', redibujar);
+  /* En "Agregar filtro o aceite" desde la ficha, a qué hoja/equipo aplica
+     el ítem nuevo se elige en #alcance — cambia el alcance real, así que
+     hay que volver a filtrar las opciones cuando se toca. */
+  const inputAlcance = $('#alcance');
+  if(inputAlcance) inputAlcance.addEventListener('change', redibujar);
   return () => ({proveedorIds:[...estado.seleccion], proveedorPreferidoId:estado.preferido});
 }
 function modalItemPlan(plan, it){
@@ -1050,7 +1081,7 @@ function modalItemPlan(plan, it){
     <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar</button>'}
       <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
     () => {
-      const leerProv = wireProveedores('plan', it);
+      const leerProv = wireProveedores('plan', it, () => 'plan:'+plan.id);
       $('#usaAux').onchange = () => {
         $('#fila-aux').classList.toggle('on', $('#usaAux').checked);
         $('#lbl-um').textContent = uCorta($('#usaAux').checked ? medidorOpuesto(plan.medidor) : plan.medidor);
@@ -1908,7 +1939,10 @@ function modalItemEquipo(eq, it){
     <div class="pie">${nuevo?'':'<button class="btn danger" id="del" style="margin-right:auto">Eliminar</button>'}
       <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
     () => {
-      const leerProv = wireProveedores('eq', base);
+      const leerProv = wireProveedores('eq', base, () => {
+        if(nuevo) return $('#alcance').value === 'plan' && plan ? 'plan:'+plan.id : 'equipo:'+eq.id;
+        return esPlan && plan ? 'plan:'+plan.id : 'equipo:'+eq.id;
+      });
       $('#usaAux').onchange = () => {
         $('#fila-aux').classList.toggle('on', $('#usaAux').checked);
         const um = uCorta($('#usaAux').checked ? medidorOpuesto(eq.medidor) : eq.medidor);
