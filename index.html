@@ -878,32 +878,26 @@ function modalPlanNombre(plan){
     };});
 }
 /* ---------------- Selector de proveedores dentro del editor de un ítem ----------------
-   No se escribe proveedor/referencia/costo aquí: se elige entre lo que ya
-   está registrado en la pestaña Proveedores para el componente que se está
-   escribiendo en #comp (o se agrega uno nuevo rápido, sin salir del
-   modal). Todo el estado se lleva en JS y se re-dibuja completo en cada
-   cambio, así que nunca hay que sincronizar el DOM a mano. */
-function filaAltaRapidaCatalogo(idGrupo){
-  return `<div class="fila" style="align-items:flex-end;margin-top:4px">
-    <label class="f" style="flex:2;margin-bottom:0">Proveedor nuevo<input class="mono" id="pk-prov-${idGrupo}" placeholder="Distribuidora XYZ"></label>
-    <label class="f" style="flex:2;margin-bottom:0">Referencia<input class="mono" id="pk-ref-${idGrupo}" placeholder="HH150-32430"></label>
-    <label class="f" style="flex:1;margin-bottom:0">Costo unit.<input type="number" id="pk-costo-${idGrupo}" placeholder="0"></label>
-    <button type="button" class="btn sec" id="pk-agregar-${idGrupo}" style="margin-bottom:0">+ Agregar</button>
-  </div>`;
-}
+   Aquí solo se elige entre lo que ya está registrado en la pestaña
+   Proveedores para el componente que se está escribiendo en #comp — para
+   dar de alta un proveedor nuevo hay que ir a esa pestaña, no hay atajo
+   aquí (se mantienen separados a propósito: Proveedores es donde se
+   administra el catálogo, el ítem solo lo usa). Todo el estado se lleva en
+   JS y se re-dibuja completo en cada cambio, así que nunca hay que
+   sincronizar el DOM a mano. */
 function htmlProveedores(it, idGrupo){
-  return `<div class="sep" style="margin-top:0">Proveedores<small>Elija cuáles de los proveedores ya registrados (pestaña Proveedores) aplican a este componente, y marque el preferido. También puede agregar uno nuevo aquí mismo.</small></div>
+  return `<div class="sep" style="margin-top:0">Proveedores<small>Elija cuáles de los proveedores ya registrados en la pestaña Proveedores aplican a este componente, y marque el preferido. Si el que necesita todavía no está ahí, agréguelo primero en esa pestaña.</small></div>
     <div id="provs-${idGrupo}"></div>`;
 }
 /* onMount: dibuja el selector y devuelve una función para leer el resultado
    al guardar. Llamar dentro del onMount del abrir(), después de que #comp
    ya esté en el DOM. */
 function wireProveedores(idGrupo, it){
-  const estado = {seleccion:new Set(it.proveedorIds||[]), preferido:it.proveedorPreferidoId||null, nuevos:[]};
+  const estado = {seleccion:new Set(it.proveedorIds||[]), preferido:it.proveedorPreferidoId||null};
   const compActual = () => ($('#comp')?.value || it.componente || '').trim();
   function redibujar(){
     const comp = compActual();
-    const opciones = comp ? catalogoDeComponente(comp).concat(estado.nuevos.filter(n => n.componente.trim().toLowerCase()===comp.toLowerCase())) : [];
+    const opciones = comp ? catalogoDeComponente(comp) : [];
     const cont = $('#provs-'+idGrupo);
     if(!cont) return;
     const filas = opciones.map(op => `
@@ -914,10 +908,9 @@ function wireProveedores(idGrupo, it){
         <td class="num mono">${op.costoUnitario?money(op.costoUnitario):'—'}</td>
         <td style="text-align:center"><input type="radio" data-pref="${op.id}" name="pk-pref-${idGrupo}" ${estado.preferido===op.id?'checked':''} ${estado.seleccion.has(op.id)?'':'disabled'}></td>
       </tr>`).join('');
-    cont.innerHTML = (opciones.length
+    cont.innerHTML = opciones.length
       ? `<table style="margin-bottom:10px"><thead><tr><th></th><th>Proveedor</th><th>Referencia</th><th class="num">Costo</th><th>Preferido</th></tr></thead><tbody>${filas}</tbody></table>`
-      : `<p class="hint" style="margin:0 0 10px">${comp ? 'No hay proveedores registrados todavía para "'+esc(comp)+'".' : 'Escriba primero el componente.'} Puede agregar uno rápido aquí, o ir a la pestaña <strong>Proveedores</strong>.</p>`)
-      + (comp ? filaAltaRapidaCatalogo(idGrupo) : '');
+      : `<p class="hint" style="margin:0 0 10px">${comp ? 'No hay proveedores registrados todavía para "'+esc(comp)+'".' : 'Escriba primero el componente.'} Vaya a la pestaña <strong>Proveedores</strong> para agregarlo.</p>`;
     cont.querySelectorAll('[data-pick]').forEach(chk => chk.onchange = () => {
       const id = chk.dataset.pick;
       if(chk.checked){ estado.seleccion.add(id); if(!estado.preferido) estado.preferido = id; }
@@ -925,23 +918,11 @@ function wireProveedores(idGrupo, it){
       redibujar();
     });
     cont.querySelectorAll('[data-pref]').forEach(rad => rad.onchange = () => { estado.preferido = rad.dataset.pref; redibujar(); });
-    const btnAlta = $('#pk-agregar-'+idGrupo);
-    if(btnAlta) btnAlta.onclick = () => {
-      const prov = $('#pk-prov-'+idGrupo).value.trim();
-      const ref = $('#pk-ref-'+idGrupo).value.trim();
-      const costoTxt = $('#pk-costo-'+idGrupo).value;
-      if(!ref) return toast('Escriba la referencia del proveedor nuevo.');
-      const nueva = {id:nid(), proveedor:prov, componente:comp, referencia:ref, costoUnitario: costoTxt===''?null:Number(costoTxt)};
-      estado.nuevos.push(nueva);
-      estado.seleccion.add(nueva.id);
-      if(!estado.preferido) estado.preferido = nueva.id;
-      redibujar();
-    };
   }
   redibujar();
   const inputComp = $('#comp');
   if(inputComp) inputComp.addEventListener('input', redibujar);
-  return () => ({proveedorIds:[...estado.seleccion], proveedorPreferidoId:estado.preferido, nuevosCatalogo:estado.nuevos});
+  return () => ({proveedorIds:[...estado.seleccion], proveedorPreferidoId:estado.preferido});
 }
 function modalItemPlan(plan, it){
   const nuevo = !it;
@@ -971,8 +952,7 @@ function modalItemPlan(plan, it){
       $('#ok').onclick = async () => {
         const comp = $('#comp').value.trim();
         if(!comp) return toast('Escriba el nombre del componente.');
-        const {proveedorIds, proveedorPreferidoId, nuevosCatalogo} = leerProv();
-        nuevosCatalogo.forEach(n => data.catalogoProveedores.push(n));
+        const {proveedorIds, proveedorPreferidoId} = leerProv();
         Object.assign(it, {categoria:$('#cat').value, componente:comp,
           cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
           intervalo:$('#int').value===''?null:Number($('#int').value), proveedorIds, proveedorPreferidoId});
@@ -1448,8 +1428,7 @@ function modalItemEquipo(eq, it){
       $('#ok').onclick = async () => {
         const comp = $('#comp').value.trim();
         if(!comp) return toast('Escriba el nombre del componente.');
-        const {proveedorIds, proveedorPreferidoId, nuevosCatalogo} = leerProv();
-        nuevosCatalogo.forEach(n => data.catalogoProveedores.push(n));
+        const {proveedorIds, proveedorPreferidoId} = leerProv();
         const def = Object.assign({categoria:$('#cat').value, componente:comp,
           cantidad:$('#cant').value===''?null:Number($('#cant').value), unidad:$('#uni').value,
           intervalo:$('#int').value===''?null:Number($('#int').value), proveedorIds, proveedorPreferidoId});
