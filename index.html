@@ -1132,6 +1132,21 @@ function componentesExistentes(){
   data.equipos.forEach(e => (e.propios||[]).forEach(i => set.add(i.componente)));
   return [...set].sort();
 }
+/* Para el componente elegido, encuentra en qué hojas de configuración
+   (compartidas por varios equipos) y en qué ítems propios de equipos
+   sueltos aparece, para poder asignar un proveedor directamente ahí desde
+   la pestaña Proveedores, sin depender de que el texto coincida en cada
+   editor de ítem por separado. */
+function objetivosDeComponente(comp){
+  const key = comp.trim().toLowerCase();
+  const planes = data.planes.map(p => ({plan:p, item:p.items.find(i => i.componente.trim().toLowerCase()===key)}))
+    .filter(x => x.item).map(x => ({tipo:'plan', clave:'plan:'+x.plan.id, plan:x.plan, item:x.item, equipos:equiposDePlan(x.plan.id)}));
+  const propios = [];
+  data.equipos.forEach(eq => (eq.propios||[]).forEach(it => {
+    if(it.componente.trim().toLowerCase()===key) propios.push({tipo:'propio', clave:'propio:'+eq.id, eq, item:it});
+  }));
+  return [...planes, ...propios];
+}
 function pintarProveedores(){
   const porProveedor = new Map();
   data.catalogoProveedores.forEach(c => {
@@ -1195,19 +1210,51 @@ function modalCatalogoProveedor(entry){
       ${opciones.length ? '' : '<p class="hint" style="margin-top:-6px">Primero agregue el filtro o lubricante en Configuración (o en la ficha del equipo) y luego vuelva aquí a registrarle el proveedor.</p>'}
       <label class="f">Referencia<input id="cp-ref" class="mono" value="${esc(entry.referencia)}" placeholder="HH150-32430"></label>
       <label class="f">Costo unitario<input type="number" id="cp-costo" value="${entry.costoUnitario??''}"></label>
+      ${opciones.length ? `<div class="sep" style="margin-top:0">Aplica a<small>Marque en qué hojas de configuración o equipos debe quedar disponible este proveedor. Una hoja compartida aplica a todos los equipos que la usan.</small></div>
+      <div id="cp-objetivos"></div>` : ''}
     </div>
     <div class="pie">${nuevo?'':'<button class="btn danger" id="cp-del" style="margin-right:auto">Eliminar</button>'}
       <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
     () => {
+      function redibujarObjetivos(){
+        const cont = $('#cp-objetivos');
+        if(!cont) return;
+        const comp = $('#cp-comp').value.trim();
+        const objetivos = comp ? objetivosDeComponente(comp) : [];
+        const fila = o => {
+          const marcado = (o.item.proveedorIds||[]).includes(entry.id);
+          const etiqueta = o.tipo==='plan'
+            ? `Hoja: <strong>${esc(o.plan.nombre)}</strong><br><span class="pd">${o.equipos.length} equipo(s): ${o.equipos.map(e=>esc(e.codigo)).join(', ') || '—'}</span>`
+            : `<strong>${esc(o.eq.codigo)}</strong> — ${esc(o.eq.modelo||'')}<br><span class="pd">Ítem propio de este equipo</span>`;
+          return `<label style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)">
+            <input type="checkbox" data-obj="${o.clave}" ${marcado?'checked':''} style="margin-top:3px">
+            <span style="font-size:13px">${etiqueta}</span></label>`;
+        };
+        cont.innerHTML = objetivos.length
+          ? objetivos.map(fila).join('')
+          : `<p class="hint" style="margin:0">Ningún equipo tiene todavía "${esc(comp)}" configurado.</p>`;
+      }
+      redibujarObjetivos();
+      $('#cp-comp').addEventListener('change', redibujarObjetivos);
       $('#ok').onclick = async () => {
         const prov = $('#cp-prov').value.trim();
         const comp = opciones.length ? $('#cp-comp').value.trim() : '';
         const ref = $('#cp-ref').value.trim();
         if(!comp) return toast('Elija el componente (debe existir primero en Configuración).');
         if(!ref) return toast('Escriba la referencia.');
+        const marcados = new Set([...document.querySelectorAll('#cp-objetivos [data-obj]:checked')].map(c => c.dataset.obj));
         Object.assign(entry, {proveedor:prov, componente:comp, referencia:ref,
           costoUnitario:$('#cp-costo').value===''?null:Number($('#cp-costo').value)});
         if(nuevo) data.catalogoProveedores.push(entry);
+        objetivosDeComponente(comp).forEach(o => {
+          const it = o.item, set = new Set(it.proveedorIds||[]);
+          if(marcados.has(o.clave)){
+            if(!set.has(entry.id)){ set.add(entry.id); it.proveedorIds = [...set]; if(!it.proveedorPreferidoId) it.proveedorPreferidoId = entry.id; }
+          } else if(set.has(entry.id)){
+            set.delete(entry.id); it.proveedorIds = [...set];
+            if(it.proveedorPreferidoId === entry.id) it.proveedorPreferidoId = it.proveedorIds[0] || null;
+          }
+        });
         await persistir(); cerrar(); pintarMain(); avisar('Proveedor guardado');
       };
       const d = $('#cp-del');
