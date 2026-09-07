@@ -6,11 +6,13 @@ máquinas de campo (por horómetro) y camiones (por odómetro).
 
 ## Qué hace
 
+- Catálogo de proveedores (pestaña Proveedores): cada combinación
+  proveedor + componente + referencia + costo se registra una sola vez ahí.
 - Hojas de configuración por modelo: qué filtros y lubricantes lleva, en qué
-  cantidad y cada cuánto se cambian. Cada uno puede tener varios proveedores
-  (a veces se compra en uno, a veces en otro), con su propia referencia y
-  costo unitario; se marca uno como preferido, y al registrar un cambio se
-  puede elegir cuál de todos se usó esa vez.
+  cantidad y cada cuánto se cambian. En vez de escribir el proveedor de
+  nuevo en cada ítem, se eligen del catálogo las opciones que aplican y se
+  marca una como preferida; al registrar un cambio se puede elegir cuál de
+  todas se usó esa vez en particular.
 - Ficha por equipo con lecturas, bitácora de uso y registro de cambios.
 - Tablero con lo vencido y lo próximo, proyectado según el uso diario medido
   de cada equipo.
