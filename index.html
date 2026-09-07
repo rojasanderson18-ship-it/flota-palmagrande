@@ -1169,6 +1169,14 @@ function componentesExistentes(){
   data.equipos.forEach(e => (e.propios||[]).forEach(i => set.add(i.componente)));
   return [...set].sort();
 }
+/* Los componentes que de verdad aplican a UN equipo concreto: los de su
+   hoja de configuración más los propios de él. Sirve para que, al
+   registrar un proveedor desde un equipo específico, el desplegable de
+   Componente no muestre los de toda la flota (filtros de tractores que no
+   tiene, etc.) sino solo los que ese equipo realmente lleva. */
+function componentesDeEquipo(eq){
+  return [...new Set(itemsDe(eq).map(i => i.componente))].sort();
+}
 /* Para el componente elegido, encuentra en qué hojas de configuración
    (compartidas por varios equipos) y en qué ítems propios de equipos
    sueltos aparece, para poder asignar un proveedor directamente ahí desde
@@ -1230,36 +1238,47 @@ function limpiarRefCatalogo(it, catId){
 function modalCatalogoProveedor(entry){
   const nuevo = !entry;
   entry = entry || {id:nid(), proveedor:'', componente:'', referencia:'', costoUnitario:null};
-  const comps = componentesExistentes();
   /* El componente se elige de una lista cerrada (no texto libre): el
      selector del ítem (wireProveedores) empareja por texto exacto contra
      data.catalogoProveedores, así que una tilde, mayúscula o palabra
      distinta a la usada en Configuración dejaba el proveedor guardado
-     pero invisible para asignar y para la ficha. Si el registro ya
-     apuntaba a un componente que ya no existe (se renombró o se borró el
-     ítem), se deja como opción aparte para no perder el dato al editar. */
-  const opciones = entry.componente && !comps.includes(entry.componente) ? [entry.componente, ...comps] : comps;
+     pero invisible para asignar y para la ficha.
+     Además, para no obligar a leer los componentes de TODA la flota
+     (filtros de máquinas que ese proveedor ni maneja), primero se elige
+     el equipo al que aplica y el desplegable de Componente se limita a
+     lo que ese equipo realmente lleva (su hoja + sus ítems propios). */
+  const equipos = data.equipos.slice().sort((a,b) => a.codigo.localeCompare(b.codigo, 'es', {numeric:true}));
+  const objPrevios = entry.componente ? objetivosDeComponente(entry.componente) : [];
+  const objAsignado = objPrevios.find(o => (o.item.proveedorIds||[]).includes(entry.id));
+  const objElegido = objAsignado || objPrevios[0] || null;
+  const eqInicial = objElegido ? (objElegido.tipo==='plan' ? (objElegido.equipos[0]||null) : objElegido.eq) : null;
   abrir(`<h3>${nuevo?'Agregar proveedor y referencia':'Editar'}</h3>
     <div class="body">
       <label class="f">Proveedor<input id="cp-prov" value="${esc(entry.proveedor)}" placeholder="Distribuidora XYZ"></label>
-      <label class="f">Componente${opciones.length ? `<select id="cp-comp">${opciones.map(c => `<option value="${esc(c)}" ${c===entry.componente?'selected':''}>${esc(c)}</option>`).join('')}</select>`
-        : `<select id="cp-comp" disabled><option>No hay componentes en Configuración todavía</option></select>`}</label>
-      ${opciones.length ? '' : '<p class="hint" style="margin-top:-6px">Primero agregue el filtro o lubricante en Configuración (o en la ficha del equipo) y luego vuelva aquí a registrarle el proveedor.</p>'}
+      <label class="f">Equipo<select id="cp-eq">
+        <option value="">Seleccione un equipo…</option>
+        ${equipos.map(e => `<option value="${e.id}" ${eqInicial&&eqInicial.id===e.id?'selected':''}>${esc(e.codigo)} — ${esc(e.marca)} ${esc(e.modelo)}</option>`).join('')}
+      </select></label>
+      <label class="f">Componente<select id="cp-comp" disabled><option>Elija primero el equipo</option></select></label>
+      <p class="hint" id="cp-comp-hint" style="margin-top:-6px"></p>
       <label class="f">Referencia<input id="cp-ref" class="mono" value="${esc(entry.referencia)}" placeholder="HH150-32430"></label>
       <label class="f">Costo unitario<input type="number" id="cp-costo" value="${entry.costoUnitario??''}"></label>
-      ${opciones.length ? `<div class="sep" style="margin-top:0">Aplica a<small>Marque en qué hojas de configuración o equipos debe quedar disponible este proveedor. Una hoja compartida aplica a todos los equipos que la usan.</small></div>
-      <div id="cp-objetivos"></div>` : ''}
+      <div class="sep" style="margin-top:0">Aplica a<small>Marque en qué hojas de configuración o equipos debe quedar disponible este proveedor. Una hoja compartida aplica a todos los equipos que la usan.</small></div>
+      <div id="cp-objetivos"><p class="hint" style="margin:0">Elija primero el equipo y el componente.</p></div>
     </div>
     <div class="pie">${nuevo?'':'<button class="btn danger" id="cp-del" style="margin-right:auto">Eliminar</button>'}
       <button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
     () => {
-      function redibujarObjetivos(){
+      function redibujarObjetivos(marcarPorDefecto){
         const cont = $('#cp-objetivos');
-        if(!cont) return;
+        if($('#cp-comp').disabled){ cont.innerHTML = '<p class="hint" style="margin:0">Elija primero el equipo y el componente.</p>'; return; }
         const comp = $('#cp-comp').value.trim();
         const objetivos = comp ? objetivosDeComponente(comp) : [];
+        const eqId = $('#cp-eq').value;
         const fila = o => {
-          const marcado = (o.item.proveedorIds||[]).includes(entry.id);
+          const yaAplica = (o.item.proveedorIds||[]).includes(entry.id);
+          const esElEquipoElegido = eqId && (o.tipo==='propio' ? o.eq.id===eqId : o.equipos.some(e => e.id===eqId));
+          const marcado = yaAplica || (marcarPorDefecto && esElEquipoElegido);
           const etiqueta = o.tipo==='plan'
             ? `Hoja: <strong>${esc(o.plan.nombre)}</strong><br><span class="pd">${o.equipos.length} equipo(s): ${o.equipos.map(e=>esc(e.codigo)).join(', ') || '—'}</span>`
             : `<strong>${esc(o.eq.codigo)}</strong> — ${esc(o.eq.modelo||'')}<br><span class="pd">Ítem propio de este equipo</span>`;
@@ -1271,13 +1290,37 @@ function modalCatalogoProveedor(entry){
           ? objetivos.map(fila).join('')
           : `<p class="hint" style="margin:0">Ningún equipo tiene todavía "${esc(comp)}" configurado.</p>`;
       }
-      redibujarObjetivos();
-      $('#cp-comp').addEventListener('change', redibujarObjetivos);
+      function redibujarComponentes(){
+        const eqId = $('#cp-eq').value;
+        const eq = eqId ? eqPorId(eqId) : null;
+        const comps = eq ? componentesDeEquipo(eq) : [];
+        const opciones = entry.componente && !comps.includes(entry.componente) ? [entry.componente, ...comps] : comps;
+        const sel = $('#cp-comp');
+        if(!eq){
+          sel.disabled = true; sel.innerHTML = '<option>Elija primero el equipo</option>';
+          $('#cp-comp-hint').textContent = '';
+          redibujarObjetivos(false);
+          return;
+        }
+        if(!opciones.length){
+          sel.disabled = true; sel.innerHTML = '<option>Este equipo no tiene filtros ni lubricantes configurados</option>';
+          $('#cp-comp-hint').textContent = 'Primero agréguelos en Configuración o desde la ficha del equipo.';
+          redibujarObjetivos(false);
+          return;
+        }
+        sel.disabled = false;
+        sel.innerHTML = opciones.map(c => `<option value="${esc(c)}" ${c===entry.componente?'selected':''}>${esc(c)}</option>`).join('');
+        $('#cp-comp-hint').textContent = '';
+        redibujarObjetivos(true);
+      }
+      redibujarComponentes();
+      $('#cp-eq').addEventListener('change', redibujarComponentes);
+      $('#cp-comp').addEventListener('change', () => redibujarObjetivos(true));
       $('#ok').onclick = async () => {
         const prov = $('#cp-prov').value.trim();
-        const comp = opciones.length ? $('#cp-comp').value.trim() : '';
+        const comp = $('#cp-comp').disabled ? '' : $('#cp-comp').value.trim();
         const ref = $('#cp-ref').value.trim();
-        if(!comp) return toast('Elija el componente (debe existir primero en Configuración).');
+        if(!comp) return toast('Elija el equipo y el componente.');
         if(!ref) return toast('Escriba la referencia.');
         const marcados = new Set([...document.querySelectorAll('#cp-objetivos [data-obj]:checked')].map(c => c.dataset.obj));
         Object.assign(entry, {proveedor:prov, componente:comp, referencia:ref,
