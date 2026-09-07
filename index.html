@@ -959,24 +959,55 @@ function htmlProveedores(it, idGrupo){
    al guardar. Llamar dentro del onMount del abrir(), después de que #comp
    ya esté en el DOM. */
 function wireProveedores(idGrupo, it){
-  const estado = {seleccion:new Set(it.proveedorIds||[]), preferido:it.proveedorPreferidoId||null};
+  const estado = {seleccion:new Set(it.proveedorIds||[]), preferido:it.proveedorPreferidoId||null, filtro:''};
   const compActual = () => ($('#comp')?.value || it.componente || '').trim();
+  /* Con pocos proveedores una tabla plana alcanza, pero al crecer el
+     catálogo (varios proveedores por componente) repetir el nombre del
+     proveedor en cada fila y no poder buscar se vuelve inmanejable.
+     Se agrupan las filas por proveedor (el nombre queda una sola vez
+     como encabezado del grupo) y se agrega un buscador que filtra por
+     proveedor o referencia, mostrado solo cuando de verdad hace falta. */
   function redibujar(){
     const comp = compActual();
-    const opciones = comp ? catalogoDeComponente(comp) : [];
+    const todas = comp ? catalogoDeComponente(comp) : [];
     const cont = $('#provs-'+idGrupo);
     if(!cont) return;
-    const filas = opciones.map(op => `
-      <tr>
-        <td style="width:26px"><input type="checkbox" data-pick="${op.id}" ${estado.seleccion.has(op.id)?'checked':''}></td>
-        <td>${esc(op.proveedor||'(sin nombre)')}</td>
-        <td class="mono">${esc(op.referencia)}</td>
-        <td class="num mono">${op.costoUnitario?money(op.costoUnitario):'—'}</td>
-        <td style="text-align:center"><input type="radio" data-pref="${op.id}" name="pk-pref-${idGrupo}" ${estado.preferido===op.id?'checked':''} ${estado.seleccion.has(op.id)?'':'disabled'}></td>
-      </tr>`).join('');
-    cont.innerHTML = opciones.length
-      ? `<div class="tabla-envoltorio"><table style="margin-bottom:10px"><thead><tr><th></th><th>Proveedor</th><th>Referencia</th><th class="num">Costo</th><th>Preferido</th></tr></thead><tbody>${filas}</tbody></table></div>`
-      : `<p class="hint" style="margin:0 0 10px">${comp ? 'No hay proveedores registrados todavía para "'+esc(comp)+'".' : 'Escriba primero el componente.'} Vaya a la pestaña <strong>Proveedores</strong> para agregarlo.</p>`;
+    const q = estado.filtro.trim().toLowerCase();
+    const opciones = q ? todas.filter(op => (op.proveedor||'').toLowerCase().includes(q) || op.referencia.toLowerCase().includes(q)) : todas;
+    const porProveedor = new Map();
+    opciones.forEach(op => {
+      const nombre = (op.proveedor||'').trim() || '(sin nombre)';
+      if(!porProveedor.has(nombre)) porProveedor.set(nombre, []);
+      porProveedor.get(nombre).push(op);
+    });
+    const nombres = [...porProveedor.keys()].sort((a,b) => a.localeCompare(b));
+    const buscador = todas.length > 4
+      ? `<input id="prov-filtro-${idGrupo}" placeholder="Buscar proveedor o referencia…" value="${esc(estado.filtro)}" style="display:block;width:100%;margin-bottom:8px;padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius)">`
+      : '';
+    if(!todas.length){
+      cont.innerHTML = buscador + `<p class="hint" style="margin:0 0 10px">${comp ? 'No hay proveedores registrados todavía para "'+esc(comp)+'".' : 'Escriba primero el componente.'} Vaya a la pestaña <strong>Proveedores</strong> para agregarlo.</p>`;
+    } else if(!opciones.length){
+      cont.innerHTML = buscador + `<p class="hint" style="margin:0 0 10px">Ningún proveedor coincide con "${esc(estado.filtro)}".</p>`;
+    } else {
+      const filas = nombres.map(nombre => {
+        const grupo = porProveedor.get(nombre).slice().sort((a,b) => a.referencia.localeCompare(b.referencia));
+        const cabecera = `<tr><td colspan="4" style="background:#F3F6F4;font-weight:600;font-size:13px;padding:6px 10px">${esc(nombre)}</td></tr>`;
+        return cabecera + grupo.map(op => `
+          <tr>
+            <td style="width:26px"><input type="checkbox" data-pick="${op.id}" ${estado.seleccion.has(op.id)?'checked':''}></td>
+            <td class="mono">${esc(op.referencia)}</td>
+            <td class="num mono">${op.costoUnitario?money(op.costoUnitario):'—'}</td>
+            <td style="text-align:center"><input type="radio" data-pref="${op.id}" name="pk-pref-${idGrupo}" ${estado.preferido===op.id?'checked':''} ${estado.seleccion.has(op.id)?'':'disabled'}></td>
+          </tr>`).join('');
+      }).join('');
+      cont.innerHTML = buscador + `<div class="tabla-envoltorio"><table style="margin-bottom:10px"><thead><tr><th></th><th>Referencia</th><th class="num">Costo</th><th>Preferido</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+    }
+    const inputFiltro = $('#prov-filtro-'+idGrupo);
+    if(inputFiltro){
+      inputFiltro.focus();
+      inputFiltro.setSelectionRange(inputFiltro.value.length, inputFiltro.value.length);
+      inputFiltro.oninput = () => { estado.filtro = inputFiltro.value; redibujar(); };
+    }
     cont.querySelectorAll('[data-pick]').forEach(chk => chk.onchange = () => {
       const id = chk.dataset.pick;
       if(chk.checked){ estado.seleccion.add(id); if(!estado.preferido) estado.preferido = id; }
