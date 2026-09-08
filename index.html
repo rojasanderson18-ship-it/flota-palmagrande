@@ -86,6 +86,10 @@
   .btn.sec{background:var(--card);color:var(--ink);border-color:var(--line);font-weight:500}
   .btn.sec:hover{border-color:var(--steel)}
   .btn.danger{background:var(--card);color:var(--red);border-color:var(--red-soft)}
+  .menu-mas{position:fixed;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.15);padding:6px;min-width:200px;z-index:80;display:flex;flex-direction:column}
+  .menu-mas button{background:none;border:none;text-align:left;padding:9px 10px;border-radius:6px;font-size:14px;color:var(--ink);cursor:pointer;white-space:nowrap}
+  .menu-mas button:hover{background:#EEF2F0}
+  .menu-mas button.danger{color:var(--red)}
 
   section.bloque{padding:20px 22px 0;max-width:1180px}
   .bloque h2{font-size:15px;margin:0 0 4px;font-weight:600}
@@ -1985,13 +1989,8 @@ function pintarFicha(){
       <span style="color:#7A430A;font-size:13px">Este equipo está marcado como <strong>${estOp(eq).txt.toLowerCase()}</strong>. Mientras siga así no se calculan fechas estimadas y no entra en la requisición.</span></div>` : ''}
     <div class="barra">
       <button class="btn" id="btn-cambio">Registrar cambio</button>
-      <button class="btn sec" id="btn-item">Agregar filtro o aceite</button>
-      <button class="btn sec" id="btn-plan">Ver configuración del modelo</button>
-      <button class="btn sec" id="btn-estado">Cambiar estado</button>
-      <button class="btn sec" id="btn-editeq">Editar datos</button>
-      <button class="btn sec" id="btn-foto">${fotoDe(eq)?'Cambiar foto':'Agregar foto'}</button>
-      ${fotoDe(eq) ? '<button class="btn sec" id="btn-foto-del">Quitar foto</button>' : ''}
       <button class="btn sec" id="btn-imprimir">Imprimir ficha</button>
+      <button class="btn sec" id="btn-mas">Más ▾</button>
       ${sinRef ? `<span class="badge prox">${sinRef} sin referencia</span>` : ''}
     </div>
 
@@ -2036,15 +2035,9 @@ function pintarFicha(){
   const bAux = $('#btn-lectura-aux');
   if(bAux) bAux.onclick = () => modalLecturaAux(eq);
   $('#btn-cambio').onclick = () => modalCambio(eq);
-  $('#btn-item').onclick = () => modalItemEquipo(eq, null);
-  $('#btn-plan').onclick = () => { if(!plan) return toast('Este equipo no tiene hoja asignada.'); vista='planes'; planSel=plan.id; pintarNav(); pintarMain(); };
-  $('#btn-estado').onclick = () => modalEstado(eq);
-  $('#btn-editeq').onclick = () => modalEquipo(eq);
-  $('#btn-foto').onclick = () => elegirFoto(eq);
   $('#foto-grande').onclick = () => elegirFoto(eq);
   $('#btn-imprimir').onclick = () => imprimirFicha(eq);
-  const bd = $('#btn-foto-del');
-  if(bd) bd.onclick = () => confirmar('Quitar foto', 'Se borra la foto de '+eq.codigo+'. La ficha y el historial quedan intactos.', async () => {
+  const quitarFoto = () => confirmar('Quitar foto', 'Se borra la foto de '+eq.codigo+'. La ficha y el historial quedan intactos.', async () => {
     delete fotos[eq.id];
     await DB.guardarFotos(fotos);
     if(eq.fotoUrl){
@@ -2054,6 +2047,29 @@ function pintarFicha(){
     }
     pintarLista(); pintarMain(); toast('Foto eliminada');
   });
+  /* Acciones que no se usan a diario van agrupadas en "Más" para que la
+     barra no se llene de botones y lo frecuente (Registrar cambio,
+     Imprimir ficha) se vea de una vez. */
+  $('#btn-mas').onclick = (e) => {
+    e.stopPropagation();
+    const menu = menuFlotante(e.currentTarget, `
+      <button data-mas="item">Agregar filtro o aceite</button>
+      <button data-mas="plan">Ver configuración del modelo</button>
+      <button data-mas="estado">Cambiar estado</button>
+      <button data-mas="editeq">Editar datos</button>
+      <button data-mas="foto">${fotoDe(eq)?'Cambiar foto':'Agregar foto'}</button>
+      ${fotoDe(eq) ? '<button data-mas="foto-del" class="danger">Quitar foto</button>' : ''}
+    `);
+    const acciones = {
+      item: () => modalItemEquipo(eq, null),
+      plan: () => { if(!plan) return toast('Este equipo no tiene hoja asignada.'); vista='planes'; planSel=plan.id; pintarNav(); pintarMain(); },
+      estado: () => modalEstado(eq),
+      editeq: () => modalEquipo(eq),
+      foto: () => elegirFoto(eq),
+      'foto-del': quitarFoto
+    };
+    menu.querySelectorAll('[data-mas]').forEach(b => b.onclick = () => { cerrarMenuFlotante(); acciones[b.dataset.mas](); });
+  };
   $('#main').querySelectorAll('[data-edit-item]').forEach(b => b.onclick = () => {
     const it = itemsDe(eq).find(i => i.id === b.dataset.editItem);
     if(it) modalItemEquipo(eq, it);
@@ -2457,6 +2473,24 @@ function abrir(html, onMount){
 }
 function cerrar(){ $('#overlay').hidden = true; $('#modal').innerHTML = ''; }
 $('#overlay').addEventListener('click', e => { if(e.target.id === 'overlay') cerrar(); });
+
+/* Menú flotante genérico para agrupar acciones secundarias (botón "Más")
+   sin recargar la barra de botones. Se posiciona con position:fixed para
+   no quedar recortado por el scroll horizontal de la barra en celular. */
+function cerrarMenuFlotante(){ document.querySelectorAll('.menu-mas').forEach(m => m.remove()); document.onclick = null; }
+function menuFlotante(boton, itemsHtml){
+  cerrarMenuFlotante();
+  const menu = document.createElement('div');
+  menu.className = 'menu-mas';
+  menu.innerHTML = itemsHtml;
+  document.body.appendChild(menu);
+  const r = boton.getBoundingClientRect();
+  menu.style.top = Math.min(r.bottom+4, window.innerHeight-menu.offsetHeight-8)+'px';
+  menu.style.left = Math.min(r.left, window.innerWidth-menu.offsetWidth-8)+'px';
+  document.onclick = e => { if(!menu.contains(e.target) && e.target !== boton) cerrarMenuFlotante(); };
+  window.addEventListener('scroll', cerrarMenuFlotante, {capture:true, once:true});
+  return menu;
+}
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('#overlay').hidden) cerrar(); });
 
 function confirmar(titulo, texto, accion){
