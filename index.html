@@ -2092,6 +2092,7 @@ function pintarFicha(){
             <td>${esc(p.responsable||'—')}</td>
             <td><span class="badge ${p.estado==='en_mantenimiento'?'prox':'programado'}">${p.estado==='en_mantenimiento'?'En mantenimiento':'Programado'}</span></td>
             <td><button class="linkbtn" data-prog-registrar="${p.id}">Registrar cambio</button><br>
+              <button class="linkbtn" data-prog-editar="${p.id}">Editar</button><br>
               ${p.estado==='programado'?`<button class="linkbtn" data-prog-iniciar="${p.id}">Marcar en mantenimiento</button><br>`:''}
               <button class="linkbtn del" data-prog-cancelar="${p.id}">Cancelar</button></td></tr>`).join('')}</tbody></table></div>
     </section>` : ''}
@@ -2181,6 +2182,10 @@ function pintarFicha(){
   $('#main').querySelectorAll('[data-prog-registrar]').forEach(b => b.onclick = () => {
     const p = data.programaciones.find(x => x.id === b.dataset.progRegistrar);
     if(p) modalCambio(eq, p);
+  });
+  $('#main').querySelectorAll('[data-prog-editar]').forEach(b => b.onclick = () => {
+    const p = data.programaciones.find(x => x.id === b.dataset.progEditar);
+    if(p) modalProgramar(eq, p);
   });
   $('#main').querySelectorAll('[data-prog-iniciar]').forEach(b => b.onclick = async () => {
     const p = data.programaciones.find(x => x.id === b.dataset.progIniciar);
@@ -2778,30 +2783,37 @@ function modalEquipo(eq){
 /* Programar mantenimiento: solo agenda la decisión (equipo, componentes,
    fecha, responsable, observación). No toca eq.estado ni el historial —
    eso solo ocurre cuando se confirma "Registrar cambio". */
-function modalProgramar(eq){
+function modalProgramar(eq, programacion){
   const items = itemsDe(eq);
-  abrir(`<h3>Programar mantenimiento — ${esc(eq.codigo)}</h3>
+  abrir(`<h3>${programacion?'Editar programación':'Programar mantenimiento'} — ${esc(eq.codigo)}</h3>
     <div class="body">
       <label class="f">Qué se va a intervenir</label>
       <p class="hint" style="margin:-2px 0 8px">Estado actual y <strong>fecha estimada</strong> (la que ya calcula el sistema según uso e intervalo) de cada componente.</p>
       <div id="items">${items.map(it => {
         const p = proyeccion(eq,it);
-        return `<label class="check"><input type="checkbox" value="${it.id}">
+        const preseleccionado = !!(programacion && (programacion.itemIds||[]).includes(it.id));
+        return `<label class="check ${preseleccionado?'on':''}"><input type="checkbox" value="${it.id}" ${preseleccionado?'checked':''}>
           <span style="flex:1"><span class="c-nom">${esc(it.componente)}</span><br>
           <span class="c-sub">${esc(textoProyeccionItem(eq, it, p))}</span></span></label>`;
       }).join('')}</div>
       <p class="hint" id="fecha-sugerida" style="margin:12px 0 4px;font-weight:600"></p>
       <div class="fila" style="margin-top:4px">
-        <label class="f">Fecha programada <span style="font-weight:400;color:var(--steel)">(decisión operativa, siempre editable)</span><input type="date" id="f" value=""></label>
-        <label class="f">Responsable del mantenimiento (quien lo ejecuta)<input id="r" list="dl-resp-prog" placeholder="Nombre del mecánico"></label>
+        <label class="f">Fecha programada <span style="font-weight:400;color:var(--steel)">(decisión operativa, siempre editable)</span><input type="date" id="f" value="${programacion?esc(programacion.fecha||''):''}"></label>
+        <label class="f">Responsable del mantenimiento (quien lo ejecuta)<input id="r" list="dl-resp-prog" placeholder="Nombre del mecánico" value="${programacion?esc(programacion.responsable||''):''}"></label>
       </div>
       ${datalistResponsablesHTML('dl-resp-prog')}
       <p class="hint" style="margin:-6px 0 12px">No es el operador/conductor del equipo, sino quien va a hacer el mantenimiento.</p>
-      <label class="f">Observación<textarea id="o" rows="2" placeholder="Motivo o detalle de la programación"></textarea></label>
+      <label class="f">Observación<textarea id="o" rows="2" placeholder="Motivo o detalle de la programación">${programacion?esc(programacion.obs||''):''}</textarea></label>
     </div>
-    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Programar</button></div>`,
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">${programacion?'Guardar cambios':'Programar'}</button></div>`,
     () => {
-      let fechaTocada = false;
+      /* Si se está editando, la fecha ya es una decisión manual tomada
+         antes: se precarga tal cual y NUNCA se sobreescribe sola, aunque
+         el mensaje de arriba siga mostrando la proyección actual para
+         comparar. Arrancar con fechaTocada=true (en vez de sumar un
+         "modo edición" aparte) reutiliza exactamente el mismo mecanismo
+         que ya protege una edición manual al crear. */
+      let fechaTocada = !!programacion;
       const fInput = $('#f'), sugCont = $('#fecha-sugerida');
       fInput.oninput = () => { fechaTocada = true; };
       const actualizarSugerencia = () => {
@@ -2822,10 +2834,15 @@ function modalProgramar(eq){
         if(!ids.length) return toast('Marque al menos un componente.');
         const fecha = $('#f').value;
         if(!fecha) return toast('Elija la fecha programada: no hay suficiente información para sugerirla sola.');
-        data.programaciones.push({id:nid(), equipoId:eq.id, itemIds:ids, fecha,
-          responsable:$('#r').value.trim(), obs:$('#o').value.trim(), estado:'programado',
-          creado:new Date().toISOString(), historialId:null});
-        await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Mantenimiento programado');
+        const responsable = $('#r').value.trim(), obs = $('#o').value.trim();
+        if(programacion){
+          Object.assign(programacion, {itemIds:ids, fecha, responsable, obs, modificado:new Date().toISOString()});
+        } else {
+          data.programaciones.push({id:nid(), equipoId:eq.id, itemIds:ids, fecha,
+            responsable, obs, estado:'programado', creado:new Date().toISOString(), historialId:null});
+        }
+        await persistir(); cerrar(); pintarLista(); pintarMain();
+        avisar(programacion ? 'Programación actualizada' : 'Mantenimiento programado');
       };
     });
 }
