@@ -842,6 +842,34 @@ function nombresResponsablesConocidos(){
 function datalistResponsablesHTML(idList){
   return `<datalist id="${idList}">${nombresResponsablesConocidos().map(n => `<option value="${esc(n)}">`).join('')}</datalist>`;
 }
+/* Texto de apoyo para "Programar mantenimiento": puro formato sobre lo que
+   YA calcula proyeccion(eq,it) (p.clave/p.txt/p.restante/p.fecha). No es
+   una segunda fórmula de proyección, solo la forma de mostrarla. */
+function textoProyeccionItem(eq, it, p){
+  const um = it.porDias ? 'días' : uItem(eq, it);
+  const partes = [p.txt];
+  if(p.restante != null) partes.push(p.restante > 0 ? 'faltan '+nfmt(p.restante)+' '+um : 'pasaron '+nfmt(Math.abs(p.restante))+' '+um);
+  if(p.clave === 'venc') partes.push(p.fecha ? 'vencido desde '+fechaCorta(p.fecha) : 'sin fecha estimada');
+  else partes.push(p.fecha ? 'estimado '+fechaCorta(p.fecha) : 'sin fecha estimada');
+  return partes.join(' · ');
+}
+/* Fecha sugerida para "Fecha programada": agregación sobre las
+   proyecciones de los componentes marcados, sin recalcular nada por su
+   cuenta. Si alguno está vencido, se sugiere hoy (no una fecha pasada);
+   si no, se toma la fecha estimada más cercana entre los marcados que sí
+   tengan una; si ninguno tiene, no se sugiere nada y el usuario elige. */
+function fechaSugeridaPrograma(eq, items, idsSeleccionados){
+  const seleccionados = items.filter(it => idsSeleccionados.includes(it.id));
+  if(!seleccionados.length) return {fecha:null, mensaje:'', urgente:false};
+  const proys = seleccionados.map(it => proyeccion(eq, it));
+  if(proys.some(p => p.clave === 'venc'))
+    return {fecha:hoy(), mensaje:'Al menos uno de los componentes seleccionados ya está VENCIDO. Se sugiere programarlo lo antes posible (hoy).', urgente:true};
+  const conFecha = proys.filter(p => p.fecha);
+  if(!conFecha.length)
+    return {fecha:null, mensaje:'Sin fecha estimada. No hay información suficiente para sugerir cuándo realizar este mantenimiento.', urgente:false};
+  const masCercana = conFecha.reduce((a,b) => a.fecha < b.fecha ? a : b);
+  return {fecha:masCercana.fecha, mensaje:'Según el uso actual de '+eq.codigo+', el mantenimiento seleccionado debería realizarse a más tardar aproximadamente el '+fechaCorta(masCercana.fecha)+'.', urgente:false};
+}
 
 /* ---------------- Gráficas (HTML puro, sin librerías) ---------------- */
 function barrasH(filas){
@@ -2755,14 +2783,16 @@ function modalProgramar(eq){
   abrir(`<h3>Programar mantenimiento — ${esc(eq.codigo)}</h3>
     <div class="body">
       <label class="f">Qué se va a intervenir</label>
+      <p class="hint" style="margin:-2px 0 8px">Estado actual y <strong>fecha estimada</strong> (la que ya calcula el sistema según uso e intervalo) de cada componente.</p>
       <div id="items">${items.map(it => {
         const p = proyeccion(eq,it);
         return `<label class="check"><input type="checkbox" value="${it.id}">
           <span style="flex:1"><span class="c-nom">${esc(it.componente)}</span><br>
-          <span class="c-sub">${esc(p.txt)}${p.fecha?' · '+esc(fechaCorta(p.fecha)):''}</span></span></label>`;
+          <span class="c-sub">${esc(textoProyeccionItem(eq, it, p))}</span></span></label>`;
       }).join('')}</div>
-      <div class="fila" style="margin-top:14px">
-        <label class="f">Fecha programada<input type="date" id="f" value="${hoy()}"></label>
+      <p class="hint" id="fecha-sugerida" style="margin:12px 0 4px;font-weight:600"></p>
+      <div class="fila" style="margin-top:4px">
+        <label class="f">Fecha programada <span style="font-weight:400;color:var(--steel)">(decisión operativa, siempre editable)</span><input type="date" id="f" value=""></label>
         <label class="f">Responsable del mantenimiento (quien lo ejecuta)<input id="r" list="dl-resp-prog" placeholder="Nombre del mecánico"></label>
       </div>
       ${datalistResponsablesHTML('dl-resp-prog')}
@@ -2771,14 +2801,27 @@ function modalProgramar(eq){
     </div>
     <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Programar</button></div>`,
     () => {
+      let fechaTocada = false;
+      const fInput = $('#f'), sugCont = $('#fecha-sugerida');
+      fInput.oninput = () => { fechaTocada = true; };
+      const actualizarSugerencia = () => {
+        const ids = [...$('#items').querySelectorAll('input:checked')].map(i => i.value);
+        if(!ids.length){ sugCont.textContent = ''; if(!fechaTocada) fInput.value = ''; return; }
+        const s = fechaSugeridaPrograma(eq, items, ids);
+        sugCont.textContent = s.mensaje;
+        sugCont.style.color = s.urgente ? 'var(--red)' : 'var(--ink-soft)';
+        if(!fechaTocada) fInput.value = s.fecha || '';
+      };
       $('#items').querySelectorAll('.check').forEach(l => {
         const cb = l.querySelector('input');
-        cb.onchange = () => l.classList.toggle('on', cb.checked);
+        cb.onchange = () => { l.classList.toggle('on', cb.checked); actualizarSugerencia(); };
       });
+      actualizarSugerencia();
       $('#ok').onclick = async () => {
         const ids = [...$('#items').querySelectorAll('input:checked')].map(i => i.value);
         if(!ids.length) return toast('Marque al menos un componente.');
-        const fecha = $('#f').value || hoy();
+        const fecha = $('#f').value;
+        if(!fecha) return toast('Elija la fecha programada: no hay suficiente información para sugerirla sola.');
         data.programaciones.push({id:nid(), equipoId:eq.id, itemIds:ids, fecha,
           responsable:$('#r').value.trim(), obs:$('#o').value.trim(), estado:'programado',
           creado:new Date().toISOString(), historialId:null});
