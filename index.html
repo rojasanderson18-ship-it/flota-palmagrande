@@ -125,6 +125,7 @@
   .badge.venc{background:var(--red-soft);color:var(--red)}
   .badge.na{background:#E9ECEA;color:var(--steel)}
   .badge.propio{background:#E7EDF3;color:#2A4C6B}
+  .badge.programado{background:#EDE7F6;color:#5B3A9E}
   .linkbtn{background:none;border:none;color:var(--green);padding:2px 4px;font-size:13px;text-decoration:underline}
   .linkbtn.del{color:var(--red)}
   .vacio-msg{background:var(--card);border:1px dashed var(--line);border-radius:var(--radius);padding:20px;color:var(--steel);text-align:center}
@@ -811,6 +812,37 @@ function pendientes(diasMax){
 }
 function faltanRefsPlan(plan){ return plan.items.filter(i => !tieneRef(i)).length; }
 
+/* ---------------- Programaciones de mantenimiento ----------------
+   Capa de gestión aparte del cálculo real: solo registra la DECISIÓN de
+   programar, nunca toca eq.estado ni el historial. estadoItem/proyeccion
+   no la conocen ni la necesitan — el vencimiento sigue siendo el mismo
+   con o sin programación activa. */
+const programacionActiva = p => p.estado !== 'terminado' && p.estado !== 'cancelado';
+function programacionesDe(eq){
+  return data.programaciones.filter(p => p.equipoId === eq.id && programacionActiva(p))
+    .sort((a,b) => a.fecha.localeCompare(b.fecha));
+}
+function programacionesDeItem(eq, itemId){
+  return programacionesDe(eq).filter(p => (p.itemIds||[]).includes(itemId));
+}
+function programacionesActivasFlota(){
+  return data.programaciones.filter(programacionActiva).sort((a,b) => a.fecha.localeCompare(b.fecha));
+}
+/* Sugerencias de responsable del mantenimiento (quien lo ejecuta, NO el
+   operador/conductor del equipo) a partir de lo ya digitado antes, para
+   no crear un CRUD de personas y evitar que el mismo nombre quede escrito
+   de formas distintas. */
+function nombresResponsablesConocidos(){
+  const vistos = new Map();
+  const agregar = n => { n = (n||'').trim(); if(n && !vistos.has(n.toLowerCase())) vistos.set(n.toLowerCase(), n); };
+  data.historial.forEach(h => agregar(h.responsable));
+  data.programaciones.forEach(p => agregar(p.responsable));
+  return [...vistos.values()].sort((a,b) => a.localeCompare(b,'es'));
+}
+function datalistResponsablesHTML(idList){
+  return `<datalist id="${idList}">${nombresResponsablesConocidos().map(n => `<option value="${esc(n)}">`).join('')}</datalist>`;
+}
+
 /* ---------------- Gráficas (HTML puro, sin librerías) ---------------- */
 function barrasH(filas){
   const max = Math.max(...filas.map(f => f.valor), 0);
@@ -909,6 +941,28 @@ function pintarTablero(){
       <div class="graf">${barrasV(meses.map(m => ({etiqueta:m.etiqueta, valor:cuenta[m.clave]||0, texto:String(cuenta[m.clave]||0)})))}</div>`
     : '';
 
+  /* Mantenimientos programados: es solo agenda, no altera "Qué hay que
+     atender" (que sigue siendo pendientes(null) puro). */
+  const progs = programacionesActivasFlota();
+  const programados = progs.length ? `
+      <h2>Mantenimientos programados</h2>
+      <p class="hint">Ordenados por fecha. Toque una fila para abrir la ficha del equipo.</p>
+      <div class="tabla-envoltorio"><table><thead><tr>
+          <th>Fecha</th><th>Equipo</th><th>Componentes</th><th>Responsable</th><th>Estado</th>
+        </tr></thead><tbody>${progs.map(p => {
+          const eqp = eqPorId(p.equipoId);
+          if(!eqp) return '';
+          const nombres = (p.itemIds||[]).map(id => { const it = itemsDe(eqp).find(x=>x.id===id); return it ? it.componente : null; }).filter(Boolean);
+          return `<tr class="clic" data-id="${eqp.id}">
+            <td class="mono">${esc(fechaCorta(p.fecha))}</td>
+            <td><strong class="mono">${esc(eqp.codigo)}</strong> <span style="color:var(--steel)">${esc(eqp.modelo)}</span></td>
+            <td>${esc(nombres.join(', ')||'—')}</td>
+            <td>${esc(p.responsable||'—')}</td>
+            <td><span class="badge ${p.estado==='en_mantenimiento'?'prox':'programado'}">${p.estado==='en_mantenimiento'?'En mantenimiento':'Programado'}</span></td>
+          </tr>`;
+        }).join('')}</tbody></table></div>`
+    : '';
+
   $('#main').innerHTML = `
     <section class="bloque" style="padding-top:24px">
       <h1 class="titulo-vista">Estado de la flota</h1>
@@ -923,6 +977,7 @@ function pintarTablero(){
       ${parados.length ? `<p class="hint">Sin proyección de fechas por no estar operando: ${parados.map(e=>'<strong class="mono">'+esc(e.codigo)+'</strong> ('+estOp(e).txt.toLowerCase()+')').join(', ')}. Tampoco entran en la requisición.</p>` : ''}
       ${sinRef ? `<p class="hint">Faltan <strong>${sinRef}</strong> referencias por digitar en la configuración. Sin referencia, la requisición sale incompleta.</p>` : ''}
       ${carga}
+      ${programados}
       <h2>Qué hay que atender</h2>
       <p class="hint">Vencidos primero, luego lo que se acerca. Toque una fila para abrir la ficha.</p>
       ${lista.length ? `<div class="tabla-envoltorio"><table><thead><tr>
@@ -1937,8 +1992,10 @@ function tablaItems(eq, categoria){
       const p = proyeccion(eq,it);
       const um = it.porDias ? 'días' : uItem(eq, it);
       const badgeModo = it.porDias ? ' <span class="badge propio">por tiempo</span>' : (it.usaAux ? ' '+badgeMedidorPropio(medidorOpuesto(eq.medidor)) : '');
+      const progsItem = programacionesDeItem(eq, it.id);
+      const badgeProg = progsItem.length ? ` <span class="badge programado" title="Mantenimiento ya programado">Programado · ${esc(fechaCorta(progsItem[0].fecha))}</span>` : '';
       return `<tr>
-        <td>${esc(it.componente)}${it.origen==='propio'?' <span class="badge propio">solo este equipo</span>':''}${badgeModo}</td>
+        <td>${esc(it.componente)}${it.origen==='propio'?' <span class="badge propio">solo este equipo</span>':''}${badgeModo}${badgeProg}</td>
         <td class="ref mono ${tieneRef(it)?'':'vacio'}">${tieneRef(it)?esc(refTexto(it))+(it.proveedorIds.length>1?' <span style="color:var(--steel)">+'+(it.proveedorIds.length-1)+'</span>':''):'sin referencia'}</td>
         <td class="num">${it.cantidad ? esc(it.cantidad)+' '+esc(it.unidad) : '—'}</td>
         <td class="num mono">${it.intervalo ? nfmt(it.intervalo)+' '+um : '—'}</td>
@@ -1960,6 +2017,8 @@ function pintarFicha(){
   const c = costoEquipo(eq);
   const sinRef = itemsDe(eq).filter(i => !tieneRef(i)).length;
   const hayAux = itemsDe(eq).some(i => i.usaAux);
+  const itemsEq = itemsDe(eq);
+  const progsEq = programacionesDe(eq);
 
   $('#main').innerHTML = `
     <button class="backbtn" id="volver">‹ Equipos</button>
@@ -1993,6 +2052,21 @@ function pintarFicha(){
       <button class="btn sec" id="btn-mas">Más ▾</button>
       ${sinRef ? `<span class="badge prox">${sinRef} sin referencia</span>` : ''}
     </div>
+
+    ${progsEq.length ? `<section class="bloque"><h2>Mantenimientos programados</h2>
+      <p class="hint">Solo es una decisión de agenda: no cambia el cálculo de vencido/próximo hasta que se registre el cambio real.</p>
+      <div class="tabla-envoltorio"><table><thead><tr>
+          <th>Fecha</th><th>Componentes</th><th>Responsable</th><th>Estado</th><th></th>
+        </tr></thead><tbody>${progsEq.map(p => `
+          <tr><td class="mono">${esc(fechaCorta(p.fecha))}</td>
+            <td>${(p.itemIds||[]).map(id => { const it = itemsEq.find(x=>x.id===id); return it ? esc(it.componente) : null; }).filter(Boolean).join(', ') || '—'}
+              ${p.obs?`<div style="color:var(--steel);font-size:13px">${esc(p.obs)}</div>`:''}</td>
+            <td>${esc(p.responsable||'—')}</td>
+            <td><span class="badge ${p.estado==='en_mantenimiento'?'prox':'programado'}">${p.estado==='en_mantenimiento'?'En mantenimiento':'Programado'}</span></td>
+            <td><button class="linkbtn" data-prog-registrar="${p.id}">Registrar cambio</button><br>
+              ${p.estado==='programado'?`<button class="linkbtn" data-prog-iniciar="${p.id}">Marcar en mantenimiento</button><br>`:''}
+              <button class="linkbtn del" data-prog-cancelar="${p.id}">Cancelar</button></td></tr>`).join('')}</tbody></table></div>
+    </section>` : ''}
 
     <section class="bloque"><h2>Filtros</h2>
       <p class="hint">Referencias e intervalos vienen de la hoja de ${plan?esc(plan.nombre):'configuración'}. El último cambio es propio de este equipo.</p>
@@ -2053,6 +2127,7 @@ function pintarFicha(){
   $('#btn-mas').onclick = (e) => {
     e.stopPropagation();
     const menu = menuFlotante(e.currentTarget, `
+      <button data-mas="programar">Programar mantenimiento</button>
       <button data-mas="item">Agregar filtro o aceite</button>
       <button data-mas="plan">Ver configuración del modelo</button>
       <button data-mas="estado">Cambiar estado</button>
@@ -2061,6 +2136,7 @@ function pintarFicha(){
       ${fotoDe(eq) ? '<button data-mas="foto-del" class="danger">Quitar foto</button>' : ''}
     `);
     const acciones = {
+      programar: () => modalProgramar(eq),
       item: () => modalItemEquipo(eq, null),
       plan: () => { if(!plan) return toast('Este equipo no tiene hoja asignada.'); vista='planes'; planSel=plan.id; pintarNav(); pintarMain(); },
       estado: () => modalEstado(eq),
@@ -2073,6 +2149,24 @@ function pintarFicha(){
   $('#main').querySelectorAll('[data-edit-item]').forEach(b => b.onclick = () => {
     const it = itemsDe(eq).find(i => i.id === b.dataset.editItem);
     if(it) modalItemEquipo(eq, it);
+  });
+  $('#main').querySelectorAll('[data-prog-registrar]').forEach(b => b.onclick = () => {
+    const p = data.programaciones.find(x => x.id === b.dataset.progRegistrar);
+    if(p) modalCambio(eq, p);
+  });
+  $('#main').querySelectorAll('[data-prog-iniciar]').forEach(b => b.onclick = async () => {
+    const p = data.programaciones.find(x => x.id === b.dataset.progIniciar);
+    if(!p) return;
+    p.estado = 'en_mantenimiento';
+    await persistir(); pintarMain(); toast('Marcado como en mantenimiento');
+  });
+  $('#main').querySelectorAll('[data-prog-cancelar]').forEach(b => b.onclick = () => {
+    const p = data.programaciones.find(x => x.id === b.dataset.progCancelar);
+    if(!p) return;
+    confirmar('Cancelar programación', 'Queda registrada como cancelada para trazabilidad, pero deja de aparecer como pendiente.', async () => {
+      p.estado = 'cancelado';
+      await persistir(); pintarMain(); toast('Programación cancelada');
+    });
   });
   $('#main').querySelectorAll('[data-comp]').forEach(b => b.onclick = () => {
     const h = data.historial.find(x => x.id === b.dataset.comp);
@@ -2645,6 +2739,7 @@ function modalEquipo(eq){
       if(d) d.onclick = () => confirmar('Eliminar equipo', 'Se borra el equipo '+eq.codigo+', su foto y su historial. La hoja de configuración queda intacta.', async () => {
         data.equipos = data.equipos.filter(x => x.id !== eq.id);
         data.historial = data.historial.filter(h => h.equipoId !== eq.id);
+        data.programaciones = data.programaciones.filter(p => p.equipoId !== eq.id);
         delete fotos[eq.id]; sel = data.equipos[0] ? data.equipos[0].id : null;
         if(eq.fotoUrl && backendConf()) remotoBorrarFoto(eq.id).catch(() => {});
         await persistir(); await DB.guardarFotos(fotos);
@@ -2652,11 +2747,51 @@ function modalEquipo(eq){
       });
     });
 }
-function modalCambio(eq){
+/* Programar mantenimiento: solo agenda la decisión (equipo, componentes,
+   fecha, responsable, observación). No toca eq.estado ni el historial —
+   eso solo ocurre cuando se confirma "Registrar cambio". */
+function modalProgramar(eq){
+  const items = itemsDe(eq);
+  abrir(`<h3>Programar mantenimiento — ${esc(eq.codigo)}</h3>
+    <div class="body">
+      <label class="f">Qué se va a intervenir</label>
+      <div id="items">${items.map(it => {
+        const p = proyeccion(eq,it);
+        return `<label class="check"><input type="checkbox" value="${it.id}">
+          <span style="flex:1"><span class="c-nom">${esc(it.componente)}</span><br>
+          <span class="c-sub">${esc(p.txt)}${p.fecha?' · '+esc(fechaCorta(p.fecha)):''}</span></span></label>`;
+      }).join('')}</div>
+      <div class="fila" style="margin-top:14px">
+        <label class="f">Fecha programada<input type="date" id="f" value="${hoy()}"></label>
+        <label class="f">Responsable del mantenimiento (quien lo ejecuta)<input id="r" list="dl-resp-prog" placeholder="Nombre del mecánico"></label>
+      </div>
+      ${datalistResponsablesHTML('dl-resp-prog')}
+      <p class="hint" style="margin:-6px 0 12px">No es el operador/conductor del equipo, sino quien va a hacer el mantenimiento.</p>
+      <label class="f">Observación<textarea id="o" rows="2" placeholder="Motivo o detalle de la programación"></textarea></label>
+    </div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Programar</button></div>`,
+    () => {
+      $('#items').querySelectorAll('.check').forEach(l => {
+        const cb = l.querySelector('input');
+        cb.onchange = () => l.classList.toggle('on', cb.checked);
+      });
+      $('#ok').onclick = async () => {
+        const ids = [...$('#items').querySelectorAll('input:checked')].map(i => i.value);
+        if(!ids.length) return toast('Marque al menos un componente.');
+        const fecha = $('#f').value || hoy();
+        data.programaciones.push({id:nid(), equipoId:eq.id, itemIds:ids, fecha,
+          responsable:$('#r').value.trim(), obs:$('#o').value.trim(), estado:'programado',
+          creado:new Date().toISOString(), historialId:null});
+        await persistir(); cerrar(); pintarLista(); pintarMain(); avisar('Mantenimiento programado');
+      };
+    });
+}
+function modalCambio(eq, programacion){
   const items = itemsDe(eq);
   const hayAux = items.some(i => i.usaAux);
   abrir(`<h3>Registrar cambio — ${esc(eq.codigo)}</h3>
     <div class="body">
+      ${programacion ? `<p class="hint">Viene de la programación del ${esc(fechaCorta(programacion.fecha))}. Al guardar, esa programación queda como terminada.</p>` : ''}
       <div class="fila">
         <label class="f">Fecha<input type="date" id="f" value="${hoy()}"></label>
         <label class="f">${eq.medidor==='km'?'Kilometraje':'Horómetro'} del cambio (${u(eq)})<input type="number" id="l" value="${eq.lectura||''}" inputmode="numeric"></label>
@@ -2666,20 +2801,22 @@ function modalCambio(eq){
       <div id="items">${items.map(it => {
         const p = proyeccion(eq,it);
         const provs = proveedoresDe(it);
+        const preseleccionado = !!(programacion && (programacion.itemIds||[]).includes(it.id));
         const selector = provs.length>1 ? `<select class="prov-usado" data-for="${it.id}" style="display:block;margin-top:4px;font-size:12px;padding:3px 6px;width:100%">
             ${provs.map(pv => `<option value="${pv.id}" ${pv.id===it.proveedorPreferidoId?'selected':''}>${esc(pv.proveedor||'(sin nombre)')} — ${esc(pv.referencia)}</option>`).join('')}
           </select>` : '';
-        return `<label class="check"><input type="checkbox" value="${it.id}">
+        return `<label class="check ${preseleccionado?'on':''}"><input type="checkbox" value="${it.id}" ${preseleccionado?'checked':''}>
           <span style="flex:1"><span class="c-nom">${esc(it.componente)}</span><br>
           <span class="c-sub">${tieneRef(it)?esc(refTexto(it)):'sin referencia'}${it.cantidad?' · '+esc(it.cantidad)+' '+esc(it.unidad):''} · ${p.txt}</span>
           ${selector}</span></label>`;
       }).join('')}</div>
       <div class="fila" style="margin-top:14px">
-        <label class="f">Responsable<input id="r" value="Tulio Antonio Olaya González"></label>
+        <label class="f">Responsable<input id="r" list="dl-resp" value="${esc(programacion && programacion.responsable ? programacion.responsable : 'Tulio Antonio Olaya González')}"></label>
         <label class="f">Costo total<input type="number" id="c" placeholder="0">
           <span class="hint" id="c-hint" style="display:block"></span></label>
       </div>
-      <label class="f">Observaciones<textarea id="o" rows="2" placeholder="Se encontró fuga en el retén"></textarea></label>
+      ${datalistResponsablesHTML('dl-resp')}
+      <label class="f">Observaciones<textarea id="o" rows="2" placeholder="Se encontró fuga en el retén">${programacion?esc(programacion.obs||''):''}</textarea></label>
     </div>
     <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar cambio</button></div>`,
     () => {
@@ -2710,6 +2847,7 @@ function modalCambio(eq){
         cb.onchange = () => { l.classList.toggle('on', cb.checked); recalcularCosto(); };
       });
       $('#items').querySelectorAll('select.prov-usado').forEach(s => s.onchange = recalcularCosto);
+      if(programacion) recalcularCosto();
       $('#ok').onclick = async () => {
         const ids = [...$('#items').querySelectorAll('input:checked')].map(i => i.value);
         if(!ids.length) return toast('Marque al menos un filtro o aceite.');
@@ -2729,10 +2867,21 @@ function modalCambio(eq){
         });
         const coherente = registrarLectura(eq, lectura, fecha);
         if(lecturaAux != null){ eq.aux = eq.aux || {}; if(eq.aux.lectura == null || lecturaAux >= eq.aux.lectura){ eq.aux.lectura = lecturaAux; eq.aux.fecha = fecha; } }
-        data.historial.push({id:nid(), equipoId:eq.id, fecha, lectura, items:regs,
+        const registro = {id:nid(), equipoId:eq.id, fecha, lectura, items:regs,
           responsable:$('#r').value.trim(), costo:$('#c').value===''?null:Number($('#c').value), obs:$('#o').value.trim(),
-          registrado:new Date().toISOString()});
-        await persistir(); cerrar(); pintarLista(); pintarMain();
+          registrado:new Date().toISOString()};
+        data.historial.push(registro);
+        const guardadoOk = await persistir();
+        /* La programación solo se cierra si el mantenimiento en sí quedó
+           guardado: si el guardado falla, se queda tal como estaba (no
+           "terminado") para no perder la trazabilidad de que aún falta
+           registrarla de verdad. */
+        if(guardadoOk && programacion){
+          programacion.estado = 'terminado';
+          programacion.historialId = registro.id;
+          await persistir();
+        }
+        cerrar(); pintarLista(); pintarMain();
         avisar(coherente ? 'Cambio registrado' : 'Cambio registrado. La lectura no cuadra con la bitácora y no se usó para el cálculo del uso diario.');
       };
     });
@@ -2766,6 +2915,7 @@ function normalizar(){
   data.historial = data.historial || [];
   data.planes = data.planes || [];
   data.catalogoProveedores = data.catalogoProveedores || [];
+  data.programaciones = data.programaciones || [];
   data.planes.forEach(p => p.items.forEach(migrarRefItem));
   data.equipos.forEach(e => {
     e.bitacora = e.bitacora || [];
