@@ -720,6 +720,33 @@ function modalVerComprobante(h){
         });
     });
 }
+/* Corrige datos de un cambio ya registrado, sin tocar nada que alimente
+   el cálculo de vencimiento: solo responsable, observación y costo.
+   Fecha/lectura/componentes NO se editan aquí porque eq.estado ya se fijó
+   con fijarUltimo() al momento de registrar el cambio y no se deriva del
+   historial — cambiarlos aquí dejaría la ficha y el historial
+   desincronizados. */
+function modalEditarHistorial(h){
+  abrir(`<h3>Editar registro del historial</h3>
+    <div class="body">
+      <p class="hint" style="margin-top:0">Solo se corrige quién lo hizo, el costo y la observación. La fecha, la lectura y los componentes cambiados quedan tal como se registraron.</p>
+      <div class="fila">
+        <label class="f">Responsable<input id="r" list="dl-resp-hist" value="${esc(h.responsable||'')}"></label>
+        <label class="f">Costo total<input type="number" id="c" value="${h.costo??''}" placeholder="0"></label>
+      </div>
+      ${datalistResponsablesHTML('dl-resp-hist')}
+      <label class="f">Observaciones<textarea id="o" rows="2">${esc(h.obs||'')}</textarea></label>
+    </div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn" id="ok">Guardar</button></div>`,
+    () => {
+      $('#ok').onclick = async () => {
+        h.responsable = $('#r').value.trim();
+        h.costo = $('#c').value===''?null:Number($('#c').value);
+        h.obs = $('#o').value.trim();
+        await persistir(); cerrar(); pintarMain(); avisar('Registro actualizado');
+      };
+    });
+}
 
 /* ---------------- Cálculos ---------------- */
 function estadoItem(eq, it){
@@ -2129,6 +2156,7 @@ function pintarFicha(){
             <td class="num mono">${h.costo?money(h.costo):'—'}</td>
             <td><button class="linkbtn" data-comp="${h.id}">Comprobante</button><br>
               <button class="linkbtn" data-firmado="${h.id}">${comprobanteDe(h)||h.comprobanteFirmado?'Ver firmado':'Subir firmado'}</button><br>
+              <button class="linkbtn" data-edit-hist="${h.id}">Editar</button><br>
               <button class="linkbtn del" data-del-hist="${h.id}">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`
         : '<div class="vacio-msg">Sin cambios registrados. Use “Registrar cambio” cuando se intervenga el equipo.</div>'}
     </section>`;
@@ -2210,6 +2238,10 @@ function pintarFicha(){
     if(!h) return;
     if(comprobanteDe(h) || h.comprobanteFirmado) modalVerComprobante(h);
     else elegirComprobante(h);
+  });
+  $('#main').querySelectorAll('[data-edit-hist]').forEach(b => b.onclick = () => {
+    const h = data.historial.find(x => x.id === b.dataset.editHist);
+    if(h) modalEditarHistorial(h);
   });
   $('#main').querySelectorAll('[data-del-hist]').forEach(b => b.onclick = async () => {
     const h = data.historial.find(x => x.id === b.dataset.delHist);
@@ -2415,7 +2447,7 @@ function imprimirComprobante(h){
       <div class="p-firma">
         <div>${esc(h.responsable||'—')}<br><span class="p-firma-rol">Mecánico ejecuta</span></div>
         <div>${esc(eq.responsable||'—')}<br><span class="p-firma-rol">Tractorista recibe</span></div>
-        <div>Fernando Sánchez<br><span class="p-firma-rol">Director técnico valida</span></div>
+        ${eq.tipo!=='camion' ? '<div>Fernando Sánchez<br><span class="p-firma-rol">Director técnico valida</span></div>' : ''}
         <div>Anderson Rojas<br><span class="p-firma-rol">Superintendente aprueba</span></div>
       </div>
 
