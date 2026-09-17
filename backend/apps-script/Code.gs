@@ -139,8 +139,8 @@ function doPost(e){
   if(p.op === 'set_foto'){
     if(!p.key) return json_({ok:false, error:'falta key'});
     if(typeof body.value !== 'string') return json_({ok:false, error:'falta value'});
-    const m = body.value.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
-    if(!m) return json_({ok:false, error:'la foto debe venir como data URL de imagen'});
+    const m = body.value.match(/^data:(image\/[a-zA-Z0-9.+-]+|application\/pdf);base64,(.+)$/);
+    if(!m) return json_({ok:false, error:'la foto debe venir como data URL de imagen o PDF'});
     const lock = LockService.getScriptLock();
     lock.waitLock(10000);
     try{
