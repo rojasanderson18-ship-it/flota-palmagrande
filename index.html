@@ -653,17 +653,31 @@ function elegirFoto(eq){
   };
   inp.click();
 }
+/* A diferencia de la foto del equipo, el comprobante firmado también se
+   acepta en PDF (muchos lo escanean o lo firman así): un PDF no se puede
+   recomprimir como imagen, así que solo se lee tal cual en base64. */
+function leerArchivoComprobante(file){
+  if(file.type === 'application/pdf' || /\.pdf$/i.test(file.name||'')){
+    return new Promise((resolve,reject) => {
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error('lectura'));
+      fr.onload = () => resolve(fr.result);
+      fr.readAsDataURL(file);
+    });
+  }
+  return comprimirFoto(file);
+}
 /* Igual que elegirFoto pero para el comprobante firmado de UN cambio del
    historial (h), no de la ficha del equipo. */
 function elegirComprobante(h){
   const inp = document.createElement('input');
-  inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  inp.type='file'; inp.accept='image/*,application/pdf'; inp.capture='environment';
   inp.onchange = async () => {
     const f = inp.files[0]; if(!f) return;
-    toast('Procesando foto…');
+    toast('Procesando comprobante…');
     let dataUrl;
-    try{ dataUrl = await comprimirFoto(f); }
-    catch(e){ return toast('No se pudo leer esa imagen. Intente con otra.'); }
+    try{ dataUrl = await leerArchivoComprobante(f); }
+    catch(e){ return toast('No se pudo leer ese archivo. Intente con otra imagen o PDF.'); }
     fotos[h.id] = dataUrl;
     if(!await DB.guardarFotos(fotos)){ delete fotos[h.id]; return; }
     pintarMain(); toast('Comprobante guardado en este dispositivo');
@@ -682,10 +696,16 @@ function elegirComprobante(h){
 /* Muestra el comprobante firmado ya subido, con opción de reemplazarlo o
    quitarlo. Si este dispositivo todavía no lo tiene descargado (se subió
    desde otro celular) intenta traerlo del backend en el momento. */
+const esPdfDataUrl = url => /^data:application\/pdf/i.test(url||'');
+function visorArchivoHTML(dataUrl){
+  return esPdfDataUrl(dataUrl)
+    ? `<a class="btn" href="${esc(dataUrl)}" target="_blank" rel="noopener">Abrir el PDF firmado ↗</a>`
+    : `<img src="${esc(dataUrl)}" alt="" style="max-width:100%;border:1px solid var(--line);border-radius:var(--radius)">`;
+}
 function modalVerComprobante(h){
   abrir(`<h3>Comprobante firmado</h3>
     <div class="body" id="ver-comp-body" style="text-align:center">
-      ${comprobanteDe(h) ? `<img src="${esc(comprobanteDe(h))}" alt="" style="max-width:100%;border:1px solid var(--line);border-radius:var(--radius)">`
+      ${comprobanteDe(h) ? visorArchivoHTML(comprobanteDe(h))
         : '<p class="hint">Descargando del backend…</p>'}
     </div>
     <div class="pie">
@@ -700,7 +720,7 @@ function modalVerComprobante(h){
           fotos[h.id] = dataUrl;
           await DB.guardarFotos(fotos);
           const cont = $('#ver-comp-body');
-          if(cont) cont.innerHTML = `<img src="${esc(dataUrl)}" alt="" style="max-width:100%;border:1px solid var(--line);border-radius:var(--radius)">`;
+          if(cont) cont.innerHTML = visorArchivoHTML(dataUrl);
         }).catch(() => {
           const cont = $('#ver-comp-body');
           if(cont) cont.innerHTML = '<p class="hint">No se pudo descargar. Verifique la conexión e intente de nuevo.</p>';
