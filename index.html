@@ -289,6 +289,32 @@
 const KEY = 'fichas-flota-v2';
 const KEY_FOTOS = 'fichas-flota-fotos-v1';
 const KEY_BACKEND = 'fichas-flota-backend-v1';
+const KEY_PIN_BORRAR = 'fichas-flota-pin-borrar-v1';
+
+/* PIN local (por dispositivo, no se sincroniza) para frenar un borrado por
+   descuido de un registro del historial. No es seguridad real — cualquiera
+   con el navegador abierto puede ver este código — es solo un freno de
+   "¿está seguro y sabe el PIN?" antes de perder un registro. */
+const pinBorrarConfigurado = () => { try{ return !!localStorage.getItem(KEY_PIN_BORRAR); }catch(e){ return false; } };
+const pinBorrarVigente = () => { try{ return localStorage.getItem(KEY_PIN_BORRAR) || ''; }catch(e){ return ''; } };
+const guardarPinBorrar = pin => { try{ if(pin) localStorage.setItem(KEY_PIN_BORRAR, pin); else localStorage.removeItem(KEY_PIN_BORRAR); }catch(e){} };
+function confirmarConPin(titulo, texto, accion){
+  if(!pinBorrarConfigurado()) return toast('Configure un PIN para eliminar en Datos → Seguridad antes de poder borrar esto.');
+  abrir(`<h3>${esc(titulo)}</h3>
+    <div class="body">
+      <p style="margin:0 0 12px;color:var(--ink-soft)">${esc(texto)}</p>
+      <label class="f">PIN<input id="pin" type="password" inputmode="numeric" autocomplete="off"></label>
+    </div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cancelar</button><button class="btn danger" id="ok">Eliminar</button></div>`,
+    () => {
+      $('#pin').focus();
+      $('#pin').onkeydown = e => { if(e.key === 'Enter') $('#ok').click(); };
+      $('#ok').onclick = () => {
+        if($('#pin').value !== pinBorrarVigente()) return toast('PIN incorrecto.');
+        cerrar(); accion();
+      };
+    });
+}
 
 /* ---------------- Backend compartido (Google Sheets + Apps Script) ----------------
    Solo se sincronizan planes/equipos/historial/config: las fotos son pesadas y
@@ -2195,10 +2221,7 @@ function pintarFicha(){
             <td>${esc(h.responsable||'—')}
               <div style="color:var(--steel);font-size:12px">${fechaHora(h.registrado) ? 'Registrado '+esc(fechaHora(h.registrado))+(desfaseRegistro(h)>1?' ('+desfaseRegistro(h)+' días después)':'') : 'Sin sello de registro'}</div></td>
             <td class="num mono">${h.costo?money(h.costo):'—'}</td>
-            <td><button class="linkbtn" data-comp="${h.id}">Comprobante</button><br>
-              <button class="linkbtn" data-firmado="${h.id}">${comprobanteDe(h)||h.comprobanteFirmado?'Ver firmado':'Subir firmado'}</button><br>
-              <button class="linkbtn" data-edit-hist="${h.id}">Editar</button><br>
-              <button class="linkbtn del" data-del-hist="${h.id}">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`
+            <td><button class="linkbtn" data-hist-mas="${h.id}">Acciones ▾</button></td></tr>`).join('')}</tbody></table></div>`
         : '<div class="vacio-msg">Sin cambios registrados. Use “Registrar cambio” cuando se intervenga el equipo.</div>'}
     </section>`;
 
@@ -2270,28 +2293,33 @@ function pintarFicha(){
       await persistir(); pintarMain(); toast('Programación cancelada');
     });
   });
-  $('#main').querySelectorAll('[data-comp]').forEach(b => b.onclick = () => {
-    const h = data.historial.find(x => x.id === b.dataset.comp);
-    if(h) imprimirComprobante(h);
-  });
-  $('#main').querySelectorAll('[data-firmado]').forEach(b => b.onclick = () => {
-    const h = data.historial.find(x => x.id === b.dataset.firmado);
+  /* Las 4 acciones por registro del historial (Comprobante, Subir/Ver
+     firmado, Editar, Eliminar) iban apiladas en la última columna,
+     obligando a leer 4 líneas por fila. Se agrupan en el mismo menú
+     flotante que ya usa el botón "Más" de la ficha. */
+  $('#main').querySelectorAll('[data-hist-mas]').forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    const h = data.historial.find(x => x.id === b.dataset.histMas);
     if(!h) return;
-    if(comprobanteDe(h) || h.comprobanteFirmado) modalVerComprobante(h);
-    else elegirComprobante(h);
-  });
-  $('#main').querySelectorAll('[data-edit-hist]').forEach(b => b.onclick = () => {
-    const h = data.historial.find(x => x.id === b.dataset.editHist);
-    if(h) modalEditarHistorial(h);
-  });
-  $('#main').querySelectorAll('[data-del-hist]').forEach(b => b.onclick = async () => {
-    const h = data.historial.find(x => x.id === b.dataset.delHist);
-    data.historial = data.historial.filter(x => x.id !== b.dataset.delHist);
-    if(h){
-      delete fotos[h.id]; await DB.guardarFotos(fotos);
-      if(h.comprobanteFirmado && backendConf()) remotoBorrarFoto(h.id).catch(() => {});
-    }
-    await persistir(); pintarMain(); avisar('Registro eliminado');
+    const menu = menuFlotante(e.currentTarget, `
+      <button data-hm="comp">Comprobante</button>
+      <button data-hm="firmado">${comprobanteDe(h)||h.comprobanteFirmado?'Ver firmado':'Subir firmado'}</button>
+      <button data-hm="editar">Editar</button>
+      <button data-hm="eliminar" class="danger">Eliminar</button>
+    `);
+    const acciones = {
+      comp: () => imprimirComprobante(h),
+      firmado: () => { if(comprobanteDe(h) || h.comprobanteFirmado) modalVerComprobante(h); else elegirComprobante(h); },
+      editar: () => modalEditarHistorial(h),
+      eliminar: () => confirmarConPin('Eliminar registro del historial',
+        'Se borra el cambio del '+h.fecha+' y su comprobante. Esto no se puede deshacer.', async () => {
+          data.historial = data.historial.filter(x => x.id !== h.id);
+          delete fotos[h.id]; await DB.guardarFotos(fotos);
+          if(h.comprobanteFirmado && backendConf()) remotoBorrarFoto(h.id).catch(() => {});
+          await persistir(); pintarMain(); avisar('Registro eliminado');
+        })
+    };
+    menu.querySelectorAll('[data-hm]').forEach(x => x.onclick = () => { cerrarMenuFlotante(); acciones[x.dataset.hm](); });
   });
   dibujarQR($('#qr-ficha'), textoQR(eq), 112);
 }
@@ -2581,6 +2609,14 @@ function pintarDatos(){
           <input id="urlbase" placeholder="https://usuario.github.io/flota/ficha-tecnica-flota.html" value="${esc(data.config.urlBase||'')}"></label>
         <button class="btn" id="btn-url" style="flex:0 0 auto;margin-bottom:12px">Guardar</button>
       </div>
+      <h2>Seguridad</h2>
+      <p class="hint">Un PIN de este dispositivo (no se sincroniza con los demás) que hay que digitar antes de eliminar un registro del historial, para frenar un borrado por descuido. No es una clave de acceso — cualquiera que abra este aplicativo puede fijar o cambiar el PIN.</p>
+      <div class="fila" style="align-items:flex-end">
+        <label class="f" style="flex:1">PIN para eliminar
+          <input id="pin-borrar" type="password" inputmode="numeric" placeholder="${pinBorrarConfigurado()?'••••':'Sin configurar'}"></label>
+        <button class="btn sec" id="btn-pin-guardar" style="flex:0 0 auto;margin-bottom:12px">${pinBorrarConfigurado()?'Cambiar PIN':'Configurar PIN'}</button>
+        ${pinBorrarConfigurado() ? '<button class="btn danger" id="btn-pin-quitar" style="flex:0 0 auto;margin-bottom:12px">Quitar PIN</button>' : ''}
+      </div>
       <h2>Respaldo</h2>
       <div class="barra" style="padding-left:0;padding-right:0;background:none;border:none">
         <button class="btn" id="btn-export">Descargar respaldo</button>
@@ -2631,6 +2667,16 @@ function pintarDatos(){
   };
   const beClave = $('#be-clave');
   if(beClave) beClave.onclick = () => modalCambiarClave();
+  $('#btn-pin-guardar').onclick = () => {
+    const v = $('#pin-borrar').value.trim();
+    if(!v) return toast('Escriba el PIN nuevo.');
+    guardarPinBorrar(v); pintarMain(); toast('PIN guardado en este dispositivo');
+  };
+  const btnPinQuitar = $('#btn-pin-quitar');
+  if(btnPinQuitar) btnPinQuitar.onclick = () => confirmar('Quitar el PIN',
+    'Cualquiera podrá eliminar registros del historial sin pedir PIN en este dispositivo.', () => {
+      guardarPinBorrar(''); pintarMain(); toast('PIN quitado');
+    });
   $('#btn-url').onclick = async () => { data.config.urlBase = $('#urlbase').value.trim(); await persistir(); pintarMain(); avisar('Dirección guardada'); };
   $('#btn-export').onclick = () => {
     descargar(new Blob([JSON.stringify(Object.assign({}, data, {fotos}), null, 2)], {type:'application/json'}), 'fichas-flota-'+hoy()+'.json');
@@ -2688,7 +2734,6 @@ function menuFlotante(boton, itemsHtml){
   menu.style.top = Math.min(r.bottom+4, window.innerHeight-menu.offsetHeight-8)+'px';
   menu.style.left = Math.min(r.left, window.innerWidth-menu.offsetWidth-8)+'px';
   document.onclick = e => { if(!menu.contains(e.target) && e.target !== boton) cerrarMenuFlotante(); };
-  window.addEventListener('scroll', cerrarMenuFlotante, {capture:true, once:true});
   return menu;
 }
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('#overlay').hidden) cerrar(); });
