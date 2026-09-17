@@ -697,10 +697,30 @@ function elegirComprobante(h){
    quitarlo. Si este dispositivo todavía no lo tiene descargado (se subió
    desde otro celular) intenta traerlo del backend en el momento. */
 const esPdfDataUrl = url => /^data:application\/pdf/i.test(url||'');
+/* Chrome (y algunos otros) bloquean la navegación directa a una data: URL
+   grande abierta desde un enlace o target="_blank" — por seguridad, para
+   que una página no pueda "disfrazar" contenido como si fuera otra URL.
+   Eso deja la pestaña nueva en blanco. La salida es convertirla primero
+   en un Blob real y abrir esa URL de blob, que sí navega sin problema. */
+function abrirDataUrl(dataUrl){
+  const m = (dataUrl||'').match(/^data:([^;]+);base64,(.+)$/);
+  if(!m) return toast('No se pudo abrir el archivo.');
+  try{
+    const bin = atob(m[2]);
+    const bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], {type:m[1]}));
+    window.open(url, '_blank');
+  }catch(e){ toast('No se pudo abrir el archivo.'); }
+}
 function visorArchivoHTML(dataUrl){
   return esPdfDataUrl(dataUrl)
-    ? `<a class="btn" href="${esc(dataUrl)}" target="_blank" rel="noopener">Abrir el PDF firmado ↗</a>`
+    ? `<button class="btn" data-abrir-pdf>Abrir el PDF firmado ↗</button>`
     : `<img src="${esc(dataUrl)}" alt="" style="max-width:100%;border:1px solid var(--line);border-radius:var(--radius)">`;
+}
+function wireVisorArchivo(cont, dataUrl){
+  const b = cont && cont.querySelector('[data-abrir-pdf]');
+  if(b) b.onclick = () => abrirDataUrl(dataUrl);
 }
 function modalVerComprobante(h){
   abrir(`<h3>Comprobante firmado</h3>
@@ -714,13 +734,14 @@ function modalVerComprobante(h){
       <button class="btn" id="reemplazar">Reemplazar</button>
     </div>`,
     () => {
+      wireVisorArchivo($('#ver-comp-body'), comprobanteDe(h));
       if(!comprobanteDe(h) && h.comprobanteFirmado && backendConf()){
         remotoObtenerFoto(h.id).then(async dataUrl => {
           if(!dataUrl) return;
           fotos[h.id] = dataUrl;
           await DB.guardarFotos(fotos);
           const cont = $('#ver-comp-body');
-          if(cont) cont.innerHTML = visorArchivoHTML(dataUrl);
+          if(cont){ cont.innerHTML = visorArchivoHTML(dataUrl); wireVisorArchivo(cont, dataUrl); }
         }).catch(() => {
           const cont = $('#ver-comp-body');
           if(cont) cont.innerHTML = '<p class="hint">No se pudo descargar. Verifique la conexión e intente de nuevo.</p>';
