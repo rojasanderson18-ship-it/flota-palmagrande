@@ -1556,6 +1556,17 @@ function usosDetalladosDeCatalogo(catId){
 function componentesDeEquipo(eq){
   return [...new Set(itemsDe(eq).map(i => i.componente))].sort();
 }
+/* La unidad (gal/und/L...) en que se mide ese componente, para poder
+   advertir en el catálogo de proveedores que el costo unitario va en esa
+   misma unidad — no el precio de la caneca o bidón completo, un error
+   real que ya se dio: un tambor de 5 gal a $472.657 puesto tal cual como
+   "costo unitario" infla el total ×5 porque ya se multiplica por la
+   cantidad usada. */
+function unidadDeComponente(comp){
+  for(const p of data.planes){ const it = p.items.find(i => i.componente === comp); if(it) return it.unidad; }
+  for(const eq of data.equipos){ const it = (eq.propios||[]).find(i => i.componente === comp); if(it) return it.unidad; }
+  return null;
+}
 /* Para el componente elegido, encuentra en qué hojas de configuración
    (compartidas por varios equipos) y en qué ítems propios de equipos
    sueltos aparece, para poder asignar un proveedor directamente ahí desde
@@ -1675,6 +1686,7 @@ function modalCatalogoProveedor(entry){
       <p class="hint" id="cp-comp-hint" style="margin-top:-6px"></p>
       <label class="f">Referencia<input id="cp-ref" class="mono" value="${esc(entry.referencia)}" placeholder="HH150-32430"></label>
       <label class="f">Costo unitario<input type="number" id="cp-costo" value="${entry.costoUnitario??''}"></label>
+      <p class="hint" id="cp-costo-hint" style="margin-top:-6px"></p>
       <div class="sep" style="margin-top:0">Aplica a<small>Marque en qué hojas de configuración o equipos debe quedar disponible este proveedor. Una hoja compartida aplica a todos los equipos que la usan.</small></div>
       <div id="cp-objetivos"><p class="hint" style="margin:0">Elija primero el equipo y el componente.</p></div>
     </div>
@@ -1724,10 +1736,18 @@ function modalCatalogoProveedor(entry){
         sel.innerHTML = opciones.map(c => `<option value="${esc(c)}" ${c===entry.componente?'selected':''}>${esc(c)}</option>`).join('');
         $('#cp-comp-hint').textContent = '';
         redibujarObjetivos(true);
+        actualizarHintCosto();
+      }
+      function actualizarHintCosto(){
+        const comp = $('#cp-comp').disabled ? '' : $('#cp-comp').value.trim();
+        const um = comp ? unidadDeComponente(comp) : null;
+        $('#cp-costo-hint').textContent = um
+          ? `Precio por ${um} (la unidad en que se mide este componente) — si lo compra en caneca o bidón de varias unidades, divida el precio total entre cuántas ${um} trae. No ponga el precio del envase completo.`
+          : '';
       }
       redibujarComponentes();
       $('#cp-eq').addEventListener('change', redibujarComponentes);
-      $('#cp-comp').addEventListener('change', () => redibujarObjetivos(true));
+      $('#cp-comp').addEventListener('change', () => { redibujarObjetivos(true); actualizarHintCosto(); });
       $('#ok').onclick = async () => {
         const prov = $('#cp-prov').value.trim();
         const comp = $('#cp-comp').disabled ? '' : $('#cp-comp').value.trim();
