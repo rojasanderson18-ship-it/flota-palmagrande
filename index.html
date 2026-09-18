@@ -3017,6 +3017,10 @@ function modalCambio(eq, programacion){
           if(prov && prov.costoUnitario != null) sugerido += prov.costoUnitario * (it.cantidad||1);
           else faltaCosto = true;
         });
+        /* Sumar decimales en JS puede dar basura de coma flotante (ej.
+           2592015.1999999997 en vez de 2592015.2) — se redondea al peso,
+           igual que money() en el resto de la app. */
+        sugerido = Math.round(sugerido);
         cInput.value = sugerido || '';
         cHint.textContent = sugerido ? 'Sugerido según el catálogo de proveedores'+(faltaCosto?' (incompleto, falta costo de algo marcado)':'')+'. Ajuste si hace falta.' : '';
       };
