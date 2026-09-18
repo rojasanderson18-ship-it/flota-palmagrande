@@ -3003,9 +3003,13 @@ function modalCambio(eq, programacion){
         const selector = provs.length>1 ? `<select class="prov-usado" data-for="${it.id}" style="display:block;margin-top:4px;font-size:12px;padding:3px 6px;width:100%">
             ${provs.map(pv => `<option value="${pv.id}" ${pv.id===it.proveedorPreferidoId?'selected':''}>${esc(pv.proveedor||'(sin nombre)')} — ${esc(pv.referencia)}</option>`).join('')}
           </select>` : '';
+        const cantidadInput = it.cantidad ? `<span style="display:block;margin-top:4px;font-size:12px">Cantidad usada
+            <input type="number" step="0.1" class="cant-usada" data-for="${it.id}" value="${it.cantidad}" style="width:70px;margin-left:4px;padding:2px 6px;border:1px solid var(--line);border-radius:4px">
+            ${esc(it.unidad)}</span>` : '';
         return `<label class="check ${preseleccionado?'on':''}"><input type="checkbox" value="${it.id}" ${preseleccionado?'checked':''}>
           <span style="flex:1"><span class="c-nom">${esc(it.componente)}</span><br>
-          <span class="c-sub">${tieneRef(it)?esc(refTexto(it)):'sin referencia'}${it.cantidad?' · '+esc(it.cantidad)+' '+esc(it.unidad):''} · ${p.txt}</span>
+          <span class="c-sub">${tieneRef(it)?esc(refTexto(it)):'sin referencia'}${it.cantidad?' · '+esc(it.cantidad)+' '+esc(it.unidad)+' configurado':''} · ${p.txt}</span>
+          ${cantidadInput}
           ${selector}</span></label>`;
       }).join('')}</div>
       <div class="fila" style="margin-top:14px">
@@ -3024,6 +3028,11 @@ function modalCambio(eq, programacion){
       let costoTocado = false;
       const cInput = $('#c'), cHint = $('#c-hint');
       cInput.oninput = () => { costoTocado = true; cHint.textContent = ''; };
+      const cantidadUsada = id => {
+        const it = items.find(x => x.id === id);
+        const cantInput = $('#items').querySelector('.cant-usada[data-for="'+id+'"]');
+        return cantInput && cantInput.value !== '' ? Number(cantInput.value) : (it.cantidad || 1);
+      };
       const recalcularCosto = () => {
         if(costoTocado) return;
         const marcados = [...$('#items').querySelectorAll('input:checked')].map(i => i.value);
@@ -3034,7 +3043,7 @@ function modalCambio(eq, programacion){
           const sel = $('#items').querySelector('select.prov-usado[data-for="'+id+'"]');
           const provId = sel ? sel.value : it.proveedorPreferidoId;
           const prov = proveedoresDe(it).find(pv => pv.id === provId);
-          if(prov && prov.costoUnitario != null) sugerido += prov.costoUnitario * (it.cantidad||1);
+          if(prov && prov.costoUnitario != null) sugerido += prov.costoUnitario * cantidadUsada(id);
           else faltaCosto = true;
         });
         /* Sumar decimales en JS puede dar basura de coma flotante (ej.
@@ -3049,6 +3058,7 @@ function modalCambio(eq, programacion){
         cb.onchange = () => { l.classList.toggle('on', cb.checked); recalcularCosto(); };
       });
       $('#items').querySelectorAll('select.prov-usado').forEach(s => s.onchange = recalcularCosto);
+      $('#items').querySelectorAll('.cant-usada').forEach(inp => inp.oninput = recalcularCosto);
       if(programacion) recalcularCosto();
       $('#ok').onclick = async () => {
         const ids = [...$('#items').querySelectorAll('input:checked')].map(i => i.value);
@@ -3065,7 +3075,7 @@ function modalCambio(eq, programacion){
           const provId = sel ? sel.value : it.proveedorPreferidoId;
           const prov = proveedoresDe(it).find(pv => pv.id === provId) || null;
           return {itemId:id, componente:it.componente, proveedor: prov ? prov.proveedor : '',
-            referencia: prov ? prov.referencia : '', cantidad:it.cantidad, unidad:it.unidad};
+            referencia: prov ? prov.referencia : '', cantidad:cantidadUsada(id), unidad:it.unidad};
         });
         const coherente = registrarLectura(eq, lectura, fecha);
         if(lecturaAux != null){ eq.aux = eq.aux || {}; if(eq.aux.lectura == null || lecturaAux >= eq.aux.lectura){ eq.aux.lectura = lecturaAux; eq.aux.fecha = fecha; } }
