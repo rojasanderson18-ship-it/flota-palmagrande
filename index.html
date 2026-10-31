@@ -277,6 +277,8 @@
 <div id="qr-oculto" style="position:absolute;left:-9999px;top:-9999px"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- sistema de maquinaria (mismo sitio): horómetros del Preoperativo, mantenimientos del Taller y costos de Compras -->
+<script src="/maquinaria-taller-palmag/maestros.js"></script>
 <script>
 /* =====================================================================
    MODELO
@@ -393,6 +395,105 @@ async function asegurarFotos(){
     }catch(e){ /* se reintenta la próxima vez que se sincronice */ }
   }
   if(huboAlguna){ await DB.guardarFotos(fotos); pintarLista(); pintarMain(); }
+}
+
+/* =====================================================================
+   CONEXIÓN CON EL SISTEMA DE MAQUINARIA (maestros.js, mismo sitio)
+   Esta app queda como la documentación de la flota: hojas de
+   configuración, proveedores y referencias, fotos y ficha impresa.
+   Lo que pasa en el campo sale del sistema, sin digitarlo otra vez:
+   - horómetro / kilometraje y uso diario: lo registran los operarios en
+     el Preoperativo y el Cierre de jornada (Horometros);
+   - cambios de filtros y aceites: los registra Tulio en el Taller
+     (Mantenimientos), con el costo que pone Compras (Reparaciones).
+   Y al revés: las hojas de configuración y proveedores de aquí se
+   publican en el sistema (Maestros, tipo FICHAS), para que el Taller,
+   Agrovisión y Gerencia usen las mismas referencias e intervalos.
+   Un equipo que no está en la flota del sistema sigue como antes.
+   ===================================================================== */
+const SIS = { listo:false, uso:{}, estado:{}, hist:[] };
+const SIS_URL = 'https://script.google.com/macros/s/AKfycbwvDU84orwDkO_iBIBdmaq2CSQWYdp4sH9O14k7u6RpeuGeB3Ay3Nqj3HdFZ_4UobNC/exec';
+const TALLER_URL = '/maquinaria-taller-palmag/taller-palma.html';
+const normSis = t => String(t||'').toUpperCase().replace(/\s+/g,'');
+const normComp = t => String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+function codSistema(eq){
+  if(!window.Maestros) return null;
+  const f = Maestros.flotaTodas().find(x => normSis(x.cod) === normSis(eq.codigo) || (eq.placa && normSis(x.cod) === normSis(eq.placa)));
+  return f ? f.cod : null;
+}
+function estadoSistema(eq, it){ return (SIS.estado[eq.id] || {})[it.id] || null; }
+function historialTodo(){ return data.historial.concat(SIS.hist); }
+/* Lo del sistema se calcula aparte (no se guarda en los datos de esta app):
+   si en el Taller se anula un mantenimiento, aquí también desaparece. */
+function aplicarSistema(){
+  SIS.uso = {}; SIS.estado = {}; SIS.hist = [];
+  if(!window.Horometros || !window.Mantenimientos) return;
+  const ult = Horometros.ultimo(), cier = Horometros.cierres(), hy = hoy();
+  const inicio = (window.SISTEMA && SISTEMA.INICIO) || '2026-10-27';
+  let desde = isoLocal(new Date(Date.now() - 30 * 86400000)); if(desde < inicio) desde = inicio;
+  let laborales = 0;
+  for(let f = desde; f <= hy; ){ if(!window.Festivos || Festivos.laboral(f)) laborales++; const d = new Date(f+'T12:00:00'); d.setDate(d.getDate()+1); f = isoLocal(d); }
+  data.equipos.forEach(eq => {
+    const cod = codSistema(eq); if(!cod) return;
+    const u = ult[cod];
+    if(u && u.h != null){ eq.lectura = u.h; eq.lecturaFecha = u.fecha; eq.lecturaSistema = true; }
+    const c = cier.filter(x => x.cod === cod && x.fecha >= desde && x.fecha <= hy && x.horas > 0);
+    if(c.length >= 3 && laborales) SIS.uso[eq.id] = { valor: c.reduce((a, x) => a + x.horas, 0) / laborales, fuente:'medido', dias:laborales, sistema:true };
+    const items = itemsDeBase(eq), est = SIS.estado[eq.id] = {};
+    Mantenimientos.de(cod).slice().reverse().forEach(m => {
+      (m.items || []).forEach(i => {
+        const it = items.find(x => x.id === i.id) || items.find(x => normComp(x.componente) === normComp(i.comp));
+        if(it) est[it.id] = { ultLectura:m.h, ultFecha:m.fecha };
+      });
+      const cmp = window.Reparaciones ? Reparaciones.de(m.id).compras : null;
+      SIS.hist.push({ id:'taller-'+m.id, sistema:true, equipoId:eq.id, fecha:m.fecha, lectura:m.h, responsable:m.por, obs:m.nota || '',
+        costo: cmp ? (cmp.repuestos || 0) + (cmp.mano || 0) : null,
+        items:(m.items || []).map(i => ({ componente:i.comp, referencia:i.ref || '', proveedor:'', cantidad:i.cant, unidad:i.unidad })) });
+    });
+  });
+}
+function itemsDeBase(eq){
+  const plan = planPorId(eq.planId);
+  return (plan ? plan.items : []).concat(eq.propios || []);
+}
+function enviarSistema(x){
+  return fetch(SIS_URL, { method:'POST', mode:'no-cors', body:JSON.stringify({ hoja:x.hoja, fila:x.fila, encabezados:x.encabezados }) }).catch(() => {});
+}
+/* Las hojas de configuración y los proveedores se publican en el sistema
+   cuando cambian (no por cada lectura ni por las fotos). */
+function publicarFichas(){
+  if(!SIS.listo || !window.Fichas || !Fichas.desdeFichasTecnicas) return;
+  let fd; try { fd = Fichas.desdeFichasTecnicas(data); } catch(e){ return; }
+  const firma = x => JSON.stringify([x.modelos, x.asignadas, x.propios]);
+  const act = Maestros.get('FICHAS');
+  if(act && act.modelos && firma(act) === firma(fd)) return;
+  enviarSistema(Maestros.fila('FICHAS', fd, 'Fichas técnicas'));
+}
+async function conectarSistema(){
+  if(!window.Maestros || !window.Horometros) return;
+  try { await Maestros.traer(); } catch(e){}
+  (Maestros.reenviar ? Maestros.reenviar({}) : []).forEach(enviarSistema);
+  await Promise.all([Horometros.traer(), Mantenimientos.traer(), Reparaciones.traer()].map(p => p.catch(() => {})));
+  SIS.listo = true;
+  aplicarSistema(); publicarFichas();
+  pintarLista(); pintarMain();
+}
+function irAlTaller(eq){
+  abrir(`<h3>Se registra en el Taller</h3>
+    <div class="body"><p style="margin:0">Los cambios de filtros y aceites de <strong>${esc(eq.codigo)}</strong> los registra Tulio en el Taller
+      (ficha de la máquina → "Registrar mantenimiento hecho"). Aparecen aquí solos, con el costo que pone Compras.</p>
+      <p class="hint" style="margin:10px 0 0;color:var(--steel);font-size:13px">Así no se registra dos veces y el tablero de Agrovisión y Gerencia ven lo mismo.</p></div>
+    <div class="pie"><button class="btn sec" data-cerrar>Cerrar</button><a class="btn" href="${TALLER_URL}">Abrir el Taller</a></div>`);
+}
+/* En la ficha de un equipo de la flota: la lectura viene del Preoperativo
+   y el cambio se registra en el Taller. */
+function conectarFicha(eq){
+  const bl = $('#btn-lectura');
+  if(bl && eq.lecturaSistema){
+    bl.outerHTML = '<div class="lbl" style="margin-top:4px">Del Preoperativo (lo registran los operarios)</div>';
+  }
+  const bc = $('#btn-cambio');
+  if(bc){ bc.textContent = 'Registrar en el Taller'; bc.onclick = () => irAlTaller(eq); }
 }
 
 const DB = {
@@ -556,6 +657,7 @@ function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTi
 let sinAlmacenamiento = false;
 async function persistir(){
   const ok = await DB.guardar(data);
+  publicarFichas();
   if(sinAlmacenamiento !== !ok){ sinAlmacenamiento = !ok; pintarAvisoAlmacenamiento(); }
   return ok;
 }
@@ -587,7 +689,8 @@ function itemsDe(eq){
   const base = plan ? plan.items.map(i => Object.assign({}, i, {origen:'plan'})) : [];
   const props = (eq.propios||[]).map(i => Object.assign({}, i, {origen:'propio'}));
   return base.concat(props).map(i => {
-    const st = (eq.estado||{})[i.id] || {};
+    const propio = (eq.estado||{})[i.id] || {}, sis = estadoSistema(eq, i);
+    const st = sis && (!propio.ultFecha || sis.ultFecha >= propio.ultFecha) ? sis : propio;
     return Object.assign({}, i, {ultLectura: st.ultLectura ?? null, ultFecha: st.ultFecha || ''});
   });
 }
@@ -845,6 +948,7 @@ function estadoEquipo(eq){
 /* Uso diario medido: suma los tramos entre lecturas consecutivas e ignora los que
    retroceden, para que una lectura mal digitada no arruine todo el cálculo. */
 function usoDiario(eq){
+  if(SIS.uso[eq.id]) return SIS.uso[eq.id];
   const b = (eq.bitacora||[]).filter(r => r.lectura != null && r.fecha).sort((a,c)=>a.fecha.localeCompare(c.fecha));
   const tope = eq.medidor === 'km' ? 800 : 20;   // tope de plausibilidad por día
   let horas = 0, dias = 0;
@@ -2040,7 +2144,7 @@ function modalCargarCotizacion(){
    Costos
    ===================================================================== */
 function costoEquipo(eq){
-  const h = data.historial.filter(x => x.equipoId === eq.id);
+  const h = historialTodo().filter(x => x.equipoId === eq.id);
   const total = h.reduce((s,x) => s + (Number(x.costo)||0), 0);
   const lecturas = h.map(x => Number(x.lectura)).filter(n => n > 0);
   const periodo = lecturas.length ? Math.max(0, Number(eq.lectura||0) - Math.min(...lecturas)) : 0;
@@ -2155,7 +2259,7 @@ function pintarFicha(){
   if(!eq){ $('#main').innerHTML = '<section class="bloque" style="padding-top:24px"><div class="vacio-msg">Seleccione un equipo de la lista para ver su ficha.</div></section>'; return; }
   const plan = planPorId(eq.planId);
   const uso = usoDiario(eq);
-  const hist = data.historial.filter(h => h.equipoId === eq.id).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  const hist = historialTodo().filter(h => h.equipoId === eq.id).sort((a,b) => b.fecha.localeCompare(a.fecha));
   const c = costoEquipo(eq);
   const sinRef = itemsDe(eq).filter(i => !tieneRef(i)).length;
   const hayAux = itemsDe(eq).some(i => i.usaAux);
@@ -2239,9 +2343,9 @@ function pintarFicha(){
             <td>${h.items.map(i => esc(i.componente)+(i.referencia?' <span class="mono" style="color:var(--steel)">'+esc(i.referencia)+(i.proveedor?' · '+esc(i.proveedor):'')+'</span>':'')).join('<br>')}
               ${h.obs?`<div style="color:var(--steel);font-size:13px">${esc(h.obs)}</div>`:''}</td>
             <td>${esc(h.responsable||'—')}
-              <div style="color:var(--steel);font-size:12px">${fechaHora(h.registrado) ? 'Registrado '+esc(fechaHora(h.registrado))+(desfaseRegistro(h)>1?' ('+desfaseRegistro(h)+' días después)':'') : 'Sin sello de registro'}</div></td>
+              <div style="color:var(--steel);font-size:12px">${h.sistema ? 'Registrado en el Taller'+(h.costo == null ? ' · Compras no ha puesto el costo' : '') : fechaHora(h.registrado) ? 'Registrado '+esc(fechaHora(h.registrado))+(desfaseRegistro(h)>1?' ('+desfaseRegistro(h)+' días después)':'') : 'Sin sello de registro'}</div></td>
             <td class="num mono">${h.costo?money(h.costo):'—'}</td>
-            <td><button class="linkbtn" data-hist-mas="${h.id}">Acciones ▾</button></td></tr>`).join('')}</tbody></table></div>`
+            <td>${h.sistema ? '<span class="badge ok">Taller</span>' : `<button class="linkbtn" data-hist-mas="${h.id}">Acciones ▾</button>`}</td></tr>`).join('')}</tbody></table></div>`
         : '<div class="vacio-msg">Sin cambios registrados. Use “Registrar cambio” cuando se intervenga el equipo.</div>'}
     </section>`;
 
@@ -2250,6 +2354,7 @@ function pintarFicha(){
   const bAux = $('#btn-lectura-aux');
   if(bAux) bAux.onclick = () => modalLecturaAux(eq);
   $('#btn-cambio').onclick = () => modalCambio(eq);
+  if(codSistema(eq)) conectarFicha(eq);
   $('#foto-grande').onclick = () => elegirFoto(eq);
   $('#btn-imprimir').onclick = () => imprimirFicha(eq);
   const quitarFoto = () => confirmar('Quitar foto', 'Se borra la foto de '+eq.codigo+'. La ficha y el historial quedan intactos.', async () => {
@@ -2292,6 +2397,7 @@ function pintarFicha(){
     if(it) modalItemEquipo(eq, it);
   });
   $('#main').querySelectorAll('[data-prog-registrar]').forEach(b => b.onclick = () => {
+    if(codSistema(eq)) return irAlTaller(eq);
     const p = data.programaciones.find(x => x.id === b.dataset.progRegistrar);
     if(p) modalCambio(eq, p);
   });
@@ -2573,7 +2679,7 @@ function imprimirFicha(eq){
 
 /* ---------------- Historial global ---------------- */
 function pintarHistorial(){
-  const hist = [...data.historial].sort((a,b) => b.fecha.localeCompare(a.fecha));
+  const hist = historialTodo().sort((a,b) => b.fecha.localeCompare(a.fecha));
   const nombre = id => { const e = eqPorId(id); return e ? e.codigo+' '+e.marca+' '+e.modelo : '—'; };
   const total = hist.reduce((s,h) => s + (Number(h.costo)||0), 0);
   $('#main').innerHTML = `
@@ -3205,9 +3311,11 @@ $('#btn-nuevo-equipo').onclick = () => modalEquipo(null);
     if(eq){ sel = eq.id; vista = 'fichas'; }
   }
   if(window.innerWidth > 860 || vista !== 'fichas') document.body.dataset.mobile = 'ficha';
+  aplicarSistema();
   pintarNav(); pintarLista(); pintarMain();
   comprobarAlmacenamiento();
   asegurarFotos();
+  conectarSistema();
 })();
 
 if('serviceWorker' in navigator){

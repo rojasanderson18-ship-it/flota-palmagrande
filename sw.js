@@ -5,7 +5,7 @@
    primero (y se actualiza la caché), y solo se usa lo guardado si no hay
    conexión. Subir este número de versión cuando cambie esta lógica, para
    que "activate" limpie la caché vieja de quien ya tenía la app instalada. */
-const CACHE = 'flota-palmagrande-v2';
+const CACHE = 'flota-palmagrande-v3';
 const ARCHIVOS = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', e => {
@@ -22,6 +22,8 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if(e.request.method !== 'GET') return;
+  // las lecturas de las hojas (Apps Script) no se guardan: cada una es distinta y llenarían el celular
+  if(/script\.google(usercontent)?\.com/.test(e.request.url)) return;
   e.respondWith(
     fetch(e.request).then(res => {
       const copia = res.clone();
